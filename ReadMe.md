@@ -364,7 +364,7 @@ This project is licensed under the MIT License - see the [LICENSE](https://claud
 
 If you find this project useful, please consider giving it a star! ⭐
 
-[![Star History Chart](https://api.star-history.com/svg?repos=yourusername/fir-filter-demo&type=Date)](https://star-history.com/#yourusername/fir-filter-demo&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=Ndambia/fir-filter-demo&type=Date)](https://star-history.com/#Ndambia/fir-filter-demo&Date)
 
 ---
 
@@ -378,3 +378,4 @@ Having issues? Have questions?
 ---
 
 **Made with ❤️ for the signal processing community**
+
