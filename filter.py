@@ -10,7 +10,7 @@ os.makedirs('filter_demo_plots', exist_ok=True)
 plt.style.use('seaborn-v0_8-darkgrid')
 
 # ========== GENERATE SYNTHETIC SIGNAL ==========
-# Signal parameters
+# 
 fs = 200  # Sampling frequency (Hz)
 duration = 5  # Duration (seconds)
 t = np.linspace(0, duration, int(fs * duration), endpoint=False)
@@ -279,9 +279,7 @@ Sampling Rate: {fs} Hz
 
 SIGNAL COMPONENTS
 ━━━━━━━━━━━━━━━━━━━━━━
-✓ Preserved: 5, 15, 25 Hz
-✗ Removed: 0.5, 60 Hz
-✗ Attenuated: Random noise
+
 
 PERFORMANCE
 ━━━━━━━━━━━━━━━━━━━━━━
@@ -301,18 +299,18 @@ print("✓ Saved: 09_complete_overview.png")
 print("\n" + "=" * 60)
 print("FIR BANDPASS FILTER - DEMONSTRATION RESULTS")
 print("=" * 60)
-print(f"\n📊 Signal Parameters:")
+print(f"\n Signal Parameters:")
 print(f"   Sampling Rate: {fs} Hz")
 print(f"   Duration: {duration} seconds")
 print(f"   Total Samples: {len(t)}")
 
-print(f"\n🎯 Filter Specifications:")
+print(f"\n Filter Specifications:")
 print(f"   Type: FIR Bandpass")
 print(f"   Passband: {lowcut} - {highcut} Hz")
 print(f"   Filter Order: {numtaps}")
 print(f"   Window: Hamming")
 
-print(f"\n📈 Signal Components:")
+print(f"\n Signal Components:")
 print(f"   Useful frequencies: 5, 15, 25 Hz (preserved)")
 print(f"   Noise at 60 Hz: removed")
 print(f"   Baseline drift at 0.5 Hz: removed")
@@ -327,6 +325,6 @@ print(f"   SNR before filtering: {snr_before:.2f} dB")
 print(f"   SNR after filtering: {snr_after:.2f} dB")
 print(f"   SNR improvement: {snr_after - snr_before:.2f} dB")
 
-print(f"\n💾 All plots saved to: 'filter_demo_plots/' directory")
+print(f"\n All plots saved to: 'filter_demo_plots/' directory")
 print(f"   Total files: 9 individual plots")
 print("=" * 60)
