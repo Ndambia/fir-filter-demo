@@ -956,9 +956,24 @@ select:focus { border-color:var(--accent); }
   <div class="divider-v"></div>
 
   <div class="top-stats" id="topStats" style="display:none">
-    <div class="stat-chip"><span class="lbl">Fs</span>&nbsp;<span class="val" id="statFs">—</span></div>
+    <!-- Fs: editable — user can correct if auto-detect is wrong -->
+    <div class="stat-chip" title="Sample rate — auto-detected from timestamps. Click to override.">
+      <span class="lbl">Fs</span>&nbsp;
+      <input id="statFs" type="number" value="2000" min="1" max="500000" step="1"
+        title="Override sample rate and click ↵"
+        style="background:transparent;border:none;border-bottom:1px solid var(--border2);
+               color:var(--accent);font-family:var(--mono);font-size:0.65rem;
+               width:72px;outline:none;padding:0 2px;text-align:right"
+        onchange="overrideFs(this.value)"
+        onkeydown="if(event.key==='Enter')overrideFs(this.value)">
+      <span class="lbl" id="fsUnit">Hz</span>
+      <span id="fsAutoTag" style="font-size:0.55rem;padding:1px 4px;border-radius:3px;
+            background:rgba(52,211,153,0.15);color:var(--success);border:1px solid rgba(52,211,153,0.3);
+            margin-left:2px" title="Auto-detected from timestamps">AUTO</span>
+    </div>
     <div class="stat-chip"><span class="lbl">N</span>&nbsp;<span class="val" id="statN">—</span></div>
     <div class="stat-chip"><span class="lbl">dur</span>&nbsp;<span class="val" id="statDur">—</span></div>
+    <div class="stat-chip"><span class="lbl">dt</span>&nbsp;<span class="val" id="statDt">—</span></div>
     <div class="stat-chip"><span class="lbl">μ</span>&nbsp;<span class="val" id="statMean">—</span></div>
     <div class="stat-chip"><span class="lbl">σ</span>&nbsp;<span class="val" id="statStd">—</span></div>
     <div class="stat-chip"><span class="lbl">SNR</span>&nbsp;<span class="val" id="statSNR">—</span>&nbsp;<span class="lbl">dB</span></div>
@@ -1256,6 +1271,76 @@ function getNotchMeta(id) {
   return { label:`After Notch ${i+1}`, color: colors[i % colors.length], short:`N${i+1}` };
 }
 
+// ─── FS UI HELPERS ────────────────────────────────────────────
+function updateFsUI() {
+  const fs = STATE.fs;
+  const input = document.getElementById('statFs');
+  const unitEl = document.getElementById('fsUnit');
+  const tag = document.getElementById('fsAutoTag');
+
+  input.value = fs;
+
+  // Show dt tooltip
+  if (STATE.rawMedDt !== undefined) {
+    const dtStr = STATE.rawMedDt < 0.01
+      ? `${(STATE.rawMedDt * 1000).toFixed(4)} ms`
+      : STATE.rawMedDt < 10
+        ? `${STATE.rawMedDt.toFixed(4)} ms`
+        : `${STATE.rawMedDt.toFixed(1)} μs`;
+    document.getElementById('statDt').textContent = dtStr;
+    input.title = `Auto-detected: dt=${STATE.rawMedDt.toExponential(4)} ${STATE.rawMedDtUnit} → ${fs} Hz. Edit to override.`;
+  }
+
+  // Tag style: green if auto, orange if manual
+  if (STATE.fsManual) {
+    tag.textContent = 'MANUAL';
+    tag.style.background = 'rgba(250,204,21,0.15)';
+    tag.style.color = 'var(--warn)';
+    tag.style.borderColor = 'rgba(250,204,21,0.3)';
+  } else {
+    tag.textContent = 'AUTO';
+    tag.style.background = 'rgba(52,211,153,0.15)';
+    tag.style.color = 'var(--success)';
+    tag.style.borderColor = 'rgba(52,211,153,0.3)';
+  }
+
+  // Update sliders
+  const nyq = fs / 2;
+  document.getElementById('lpF').max   = nyq;
+  document.getElementById('lpFv').max  = nyq;
+  document.getElementById('hpF').max   = nyq;
+  document.getElementById('hpFv').max  = nyq;
+  if (parseFloat(document.getElementById('lpFv').value) > nyq) {
+    document.getElementById('lpF').value  = Math.round(nyq * 0.4);
+    document.getElementById('lpFv').value = Math.round(nyq * 0.4);
+  }
+
+  // Update notch sliders
+  for (const n of STATE.notches) {
+    const r = document.getElementById(`nf0r_${n.id}`);
+    if (r) { r.max = nyq; }
+    const v = document.getElementById(`nf0v_${n.id}`);
+    if (v) { v.max = nyq; }
+  }
+
+  // Duration
+  if (STATE.raw) {
+    const dur = STATE.raw.length / fs;
+    document.getElementById('statDur').textContent =
+      dur >= 60 ? `${(dur/60).toFixed(2)}min` : `${dur.toFixed(3)}s`;
+  }
+}
+
+function overrideFs(val) {
+  const fs = Math.round(parseFloat(val));
+  if (isNaN(fs) || fs < 1 || fs > 500000) return;
+  STATE.fs = fs;
+  STATE.fsManual = true;
+  updateFsUI();
+  log(`Fs manually set to ${fs} Hz`, 'warn');
+  if (STATE.raw) applyPipeline();
+}
+
 // ─── LOGGING ─────────────────────────────────────────────────
 function log(msg, type='info') {
   const el = document.getElementById('procLog');
@@ -1547,14 +1632,24 @@ function parseCSV(text, fname) {
   STATE.timestamps = timestamps.length > 0 ? new Float64Array(timestamps) : null;
 
   // ── Compute Fs from t2 - t1 ──────────────────────────────
-  // Strategy:
-  //   1. Collect ALL consecutive diffs (not just first 1000) for accuracy
-  //   2. Use MEDIAN diff — robust against jitter, gaps, dropped samples
-  //   3. Detect timestamp unit by looking at the median diff magnitude:
-  //        dt < 0.01        → seconds   (e.g. 0.0005 s  → 2000 Hz)
-  //        0.01 ≤ dt < 10   → milliseconds (e.g. 0.5 ms → 2000 Hz)
-  //        dt ≥ 10          → microseconds (e.g. 500 μs → 2000 Hz)
-  //   4. Snap to nearest standard Fs for clean display
+  // Robust approach:
+  //   1. Compute median consecutive dt (up to 5000 diffs)
+  //   2. Try ALL three unit interpretations (seconds, ms, µs)
+  //   3. For each, compute how close the resulting Fs is to a standard rate
+  //   4. Pick the interpretation that gives the BEST snap to a standard rate
+  //   5. If none snaps within 10%, just use the seconds interpretation as-is
+  //   6. Always show raw dt and allow user to manually override Fs
+  const STD_RATES = [50,100,128,200,250,256,500,512,1000,1024,1250,
+                     2000,2048,4000,4096,5000,8000,10000,12000,16000,
+                     20000,22050,44100,48000,96000,192000];
+
+  function snapDist(fs) {
+    const best = STD_RATES.reduce((a,b) => Math.abs(b-fs)<Math.abs(a-fs)?b:a);
+    return { snapped: best, relErr: Math.abs(best-fs)/fs };
+  }
+
+  STATE.fsAutoDetected = false;
+
   if (STATE.timestamps && STATE.timestamps.length > 2) {
     const diffs = [];
     const maxDiffs = Math.min(STATE.timestamps.length - 1, 5000);
@@ -1567,61 +1662,49 @@ function parseCSV(text, fname) {
       diffs.sort((a, b) => a - b);
       const medDt = diffs[Math.floor(diffs.length / 2)];
 
-      // Detect unit from the magnitude of dt
-      let fsRaw, unit, unitLabel;
-      if (medDt < 0.01) {
-        // Seconds: dt=0.0005 → Fs=2000
-        unit = 1; unitLabel = 's';
-        fsRaw = 1 / medDt;
-      } else if (medDt < 10) {
-        // Milliseconds: dt=0.5 → Fs=2000
-        unit = 1e-3; unitLabel = 'ms';
-        fsRaw = 1 / (medDt * 1e-3);
-      } else {
-        // Microseconds: dt=500 → Fs=2000
-        unit = 1e-6; unitLabel = 'μs';
-        fsRaw = 1 / (medDt * 1e-6);
+      // Try seconds, milliseconds, microseconds — pick best snap
+      const candidates = [
+        { label:'s',  fsRaw: 1 / medDt          },
+        { label:'ms', fsRaw: 1 / (medDt * 1e-3) },
+        { label:'μs', fsRaw: 1 / (medDt * 1e-6) },
+      ].filter(c => c.fsRaw >= 10 && c.fsRaw <= 500000)
+       .map(c => ({ ...c, ...snapDist(c.fsRaw) }));
+
+      // Sort by relative error to nearest standard rate
+      candidates.sort((a, b) => a.relErr - b.relErr);
+
+      const best = candidates[0];
+      const usedFs = best.relErr < 0.10 ? best.snapped : Math.round(best.fsRaw);
+
+      STATE.fs = Math.max(10, Math.min(500000, usedFs));
+      STATE.fsAutoDetected = true;
+      STATE.rawMedDt = medDt;
+      STATE.rawMedDtUnit = best.label;
+
+      log(`median dt = ${medDt.toExponential(4)} → interpreted as ${best.label}` +
+          ` → raw Fs = ${Math.round(best.fsRaw)} Hz → snapped to ${STATE.fs} Hz` +
+          ` (err ${(best.relErr*100).toFixed(2)}%)`, 'ok');
+
+      if (best.relErr > 0.10) {
+        log(`⚠ Fs not near any standard rate. Check timestamps or override manually.`, 'warn');
       }
-
-      // Snap to nearest standard sample rate
-      const stdRates = [100,200,250,500,1000,1250,2000,2048,4000,4096,
-                        5000,8000,10000,16000,20000,22050,44100,48000,
-                        96000,192000];
-      const snapped = stdRates.reduce((a, b) =>
-        Math.abs(b - fsRaw) < Math.abs(a - fsRaw) ? b : a);
-
-      // Use snapped rate if within 5% of raw, otherwise use raw rounded
-      const usedFs = Math.abs(snapped - fsRaw) / fsRaw < 0.05 ? snapped : Math.round(fsRaw);
-
-      STATE.fs = Math.max(10, Math.min(200000, usedFs));
-      log(`dt = ${medDt.toFixed(8)} ${unitLabel}  →  raw Fs = ${Math.round(fsRaw)} Hz  →  using ${STATE.fs} Hz`, 'ok');
     } else {
-      log('All diffs ≤ 0 — timestamps may be constant. Using default 2000 Hz', 'warn');
+      log('All diffs ≤ 0. Using default Fs = 2000 Hz', 'warn');
     }
   } else {
-    log('No timestamps found — using default Fs = 2000 Hz', 'warn');
+    log('No timestamps — using default Fs = 2000 Hz', 'warn');
   }
 
-  // Update LP/HP slider max
-  const nyq = STATE.fs/2;
-  document.getElementById('lpF').max = nyq;
-  document.getElementById('lpFv').max = nyq;
-  document.getElementById('hpF').max = nyq;
-  document.getElementById('hpFv').max = nyq;
-  if (parseFloat(document.getElementById('lpFv').value) > nyq) {
-    document.getElementById('lpF').value = nyq*0.4;
-    document.getElementById('lpFv').value = (nyq*0.4).toFixed(0);
-  }
+  // ── Update all UI that depends on Fs ─────────────────────
+  updateFsUI();
 
   const st = calcStats(STATE.raw);
-  document.getElementById('statFs').textContent = STATE.fs > 999 ? (STATE.fs/1000).toFixed(1)+'kHz' : STATE.fs+'Hz';
-  document.getElementById('statN').textContent = values.length.toLocaleString();
-  document.getElementById('statDur').textContent = (values.length/STATE.fs).toFixed(2)+'s';
+  document.getElementById('statN').textContent    = values.length.toLocaleString();
   document.getElementById('statMean').textContent = st.mean.toFixed(1);
-  document.getElementById('statStd').textContent = st.std.toFixed(1);
+  document.getElementById('statStd').textContent  = st.std.toFixed(1);
   document.getElementById('topStats').style.display = 'flex';
 
-  log(`Loaded ${values.length} samples, Fs=${STATE.fs}Hz, dur=${(values.length/STATE.fs).toFixed(2)}s`,'ok');
+  log(`Loaded ${values.length} samples, Fs=${STATE.fs} Hz, dur=${(values.length/STATE.fs).toFixed(3)}s`, 'ok');
 
   document.getElementById('emptyState').style.display = 'none';
   document.getElementById('btnApply').disabled = false;
