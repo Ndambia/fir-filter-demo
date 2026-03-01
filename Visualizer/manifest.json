@@ -1,0 +1,14 @@
+{
+  "name": "NeuroLab Pro — Signal Analysis Suite",
+  "short_name": "NeuroLab Pro",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#060810",
+  "theme_color": "#060810",
+  "description": "Offline-capable signal analysis suite for CSV time-series (EMG/EOG/ADC).",
+  "icons": [
+    { "src": "./icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "./icons/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
