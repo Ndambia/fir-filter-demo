@@ -1,2544 +1,1833 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>NeuroLab Pro — Signal Analysis Suite</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<style>
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Syne:wght@400;600;700;800&display=swap');
-
-:root {
-  --bg:       #060810;
-  --bg2:      #0b0e18;
-  --bg3:      #0f1420;
-  --panel:    #111827;
-  --panel2:   #161e2e;
-  --border:   #1f2d42;
-  --border2:  #2a3a52;
-  --c0:  #38bdf8;  /* raw */
-  --c1:  #facc15;  /* MA */
-  --c2:  #f97316;  /* LP */
-  --c3:  #a78bfa;  /* HP */
-  --c4:  #34d399;  /* notch1 */
-  --c5:  #fb7185;  /* notch2 */
-  --c6:  #60a5fa;  /* notch3 */
-  --c7:  #fbbf24;  /* final */
-  --accent: #38bdf8;
-  --success: #34d399;
-  --warn:    #facc15;
-  --danger:  #fb7185;
-  --text:    #cbd5e1;
-  --muted:   #4a5f78;
-  --mono: 'JetBrains Mono', monospace;
-  --sans: 'Syne', sans-serif;
-}
-
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-html, body { width:100%; height:100%; overflow:hidden; }
-
-body {
-  background: var(--bg);
-  color: var(--text);
-  font-family: var(--sans);
-  display: flex;
-  flex-direction: column;
-}
-
-/* ── SCANLINE OVERLAY ── */
-body::after {
-  content:'';
-  position:fixed;
-  inset:0;
-  background: repeating-linear-gradient(
-    0deg,
-    transparent,
-    transparent 2px,
-    rgba(0,0,0,0.06) 2px,
-    rgba(0,0,0,0.06) 4px
-  );
-  pointer-events:none;
-  z-index:9999;
-}
-
-/* ── GLOW BG ── */
-.bg-glow {
-  position:fixed; inset:0; pointer-events:none; z-index:0;
-  background:
-    radial-gradient(ellipse 70% 50% at 15% 20%, rgba(56,189,248,0.04) 0%, transparent 70%),
-    radial-gradient(ellipse 50% 60% at 85% 70%, rgba(167,139,250,0.04) 0%, transparent 70%),
-    radial-gradient(ellipse 40% 30% at 50% 100%, rgba(52,211,153,0.03) 0%, transparent 60%);
-}
-
-/* ── TOPBAR ── */
-.topbar {
-  height: 52px;
-  background: var(--bg2);
-  border-bottom: 1px solid var(--border);
-  display: flex;
-  align-items: center;
-  padding: 0 16px;
-  gap: 16px;
-  flex-shrink: 0;
-  position: relative;
-  z-index: 100;
-}
-
-.logo {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-right: 8px;
-}
-
-.logo-mark {
-  width: 30px; height: 30px;
-  position: relative;
-  flex-shrink:0;
-}
-
-.logo-mark svg { width:100%; height:100%; }
-
-.logo-text {
-  font-family: var(--sans);
-  font-weight: 800;
-  font-size: 1rem;
-  letter-spacing: -0.5px;
-  color: #fff;
-  line-height:1;
-}
-
-.logo-text span {
-  color: var(--accent);
-}
-
-.logo-sub {
-  font-family: var(--mono);
-  font-size: 0.58rem;
-  color: var(--muted);
-  letter-spacing: 2px;
-  text-transform: uppercase;
-  margin-top: 1px;
-}
-
-.divider-v { width:1px; height:28px; background:var(--border); flex-shrink:0; }
-
-/* File drop area in topbar */
-.top-drop {
-  display:flex;
-  align-items:center;
-  gap:8px;
-  padding:6px 14px;
-  border:1px dashed var(--border2);
-  border-radius:6px;
-  cursor:pointer;
-  transition:all 0.2s;
-  font-size:0.72rem;
-  font-family: var(--mono);
-  color: var(--muted);
-  white-space:nowrap;
-}
-
-.top-drop:hover, .top-drop.drag { border-color:var(--accent); color:var(--accent); background:rgba(56,189,248,0.05); }
-
-.top-drop .icon { font-size:1rem; }
-
-.file-badge {
-  background: rgba(56,189,248,0.1);
-  border: 1px solid rgba(56,189,248,0.3);
-  color: var(--accent);
-  font-family: var(--mono);
-  font-size: 0.68rem;
-  padding: 3px 8px;
-  border-radius:4px;
-  max-width: 160px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* Stats in topbar */
-.top-stats {
-  display:flex;
-  gap:8px;
-  align-items:center;
-}
-
-.stat-chip {
-  display:flex; align-items:center; gap:5px;
-  background:var(--bg3);
-  border:1px solid var(--border);
-  border-radius:4px;
-  padding:4px 8px;
-  font-family:var(--mono);
-  font-size:0.65rem;
-}
-
-.stat-chip .lbl { color:var(--muted); }
-.stat-chip .val { color:var(--accent); }
-
-.top-right {
-  margin-left:auto;
-  display:flex;
-  align-items:center;
-  gap:8px;
-}
-
-.btn {
-  display:flex; align-items:center; gap:5px;
-  padding:6px 12px;
-  border-radius:5px;
-  font-family:var(--mono);
-  font-size:0.68rem;
-  letter-spacing:0.5px;
-  border:1px solid;
-  cursor:pointer;
-  transition:all 0.15s;
-  white-space:nowrap;
-}
-
-.btn-ghost { background:transparent; border-color:var(--border2); color:var(--muted); }
-.btn-ghost:hover { border-color:var(--accent); color:var(--accent); background:rgba(56,189,248,0.05); }
-
-.btn-primary { background:rgba(56,189,248,0.1); border-color:var(--accent); color:var(--accent); }
-.btn-primary:hover { background:rgba(56,189,248,0.2); box-shadow:0 0 12px rgba(56,189,248,0.2); }
-
-.btn-success { background:rgba(52,211,153,0.1); border-color:var(--success); color:var(--success); }
-.btn-success:hover { background:rgba(52,211,153,0.2); }
-
-.btn:disabled { opacity:0.25; cursor:not-allowed; pointer-events:none; }
-
-.status-dot {
-  width:7px; height:7px; border-radius:50%;
-  background: var(--muted);
-  flex-shrink:0;
-}
-.status-dot.live { background:var(--success); box-shadow:0 0 6px var(--success); animation:blink 1.5s infinite; }
-.status-dot.warn { background:var(--warn); box-shadow:0 0 6px var(--warn); }
-
-@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.4} }
-
-/* ── MAIN LAYOUT ── */
-.workspace {
-  flex:1;
-  display:flex;
-  overflow:hidden;
-  position:relative;
-  z-index:1;
-}
-
-/* ── LEFT SIDEBAR ── */
-.sidebar {
-  width: 260px;
-  flex-shrink:0;
-  background:var(--bg2);
-  border-right:1px solid var(--border);
-  display:flex;
-  flex-direction:column;
-  overflow:hidden;
-}
-
-.sidebar-tabs {
-  display:flex;
-  border-bottom:1px solid var(--border);
-  flex-shrink:0;
-}
-
-.stab {
-  flex:1;
-  padding:9px 4px;
-  text-align:center;
-  font-family:var(--mono);
-  font-size:0.6rem;
-  letter-spacing:1px;
-  text-transform:uppercase;
-  color:var(--muted);
-  cursor:pointer;
-  border-bottom:2px solid transparent;
-  transition:all 0.15s;
-}
-
-.stab:hover { color:var(--text); }
-.stab.active { color:var(--accent); border-color:var(--accent); }
-
-.sidebar-body {
-  flex:1;
-  overflow-y:auto;
-  padding:14px;
-  display:flex;
-  flex-direction:column;
-  gap:14px;
-}
-
-.sidebar-body::-webkit-scrollbar { width:3px; }
-.sidebar-body::-webkit-scrollbar-thumb { background:var(--border); }
-
-.sb-section { display:flex; flex-direction:column; gap:8px; }
-
-.sb-label {
-  font-family:var(--mono);
-  font-size:0.58rem;
-  letter-spacing:2px;
-  text-transform:uppercase;
-  color:var(--muted);
-  display:flex;
-  align-items:center;
-  gap:6px;
-}
-
-.sb-label::after {
-  content:'';
-  flex:1;
-  height:1px;
-  background:var(--border);
-}
-
-/* Filter cards */
-.fcard {
-  background:var(--panel);
-  border:1px solid var(--border);
-  border-radius:8px;
-  overflow:hidden;
-  transition:border-color 0.2s;
-}
-
-.fcard.active-filter { border-color:rgba(56,189,248,0.3); }
-
-.fcard-header {
-  display:flex;
-  align-items:center;
-  gap:8px;
-  padding:9px 10px;
-  cursor:pointer;
-  user-select:none;
-}
-
-.fcard-header:hover { background:rgba(255,255,255,0.02); }
-
-.fcard-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
-
-.fcard-name {
-  font-family:var(--mono);
-  font-size:0.72rem;
-  color:var(--text);
-  flex:1;
-}
-
-.fcard-order {
-  font-family:var(--mono);
-  font-size:0.6rem;
-  color:var(--muted);
-}
-
-.toggle {
-  position:relative; width:30px; height:16px; flex-shrink:0;
-}
-.toggle input { display:none; }
-.tslider {
-  position:absolute; inset:0;
-  background:var(--border);
-  border-radius:8px;
-  cursor:pointer;
-  transition:0.2s;
-}
-.tslider::before {
-  content:'';
-  position:absolute;
-  width:10px; height:10px;
-  left:3px; top:3px;
-  background:var(--muted);
-  border-radius:50%;
-  transition:0.2s;
-}
-.toggle input:checked ~ .tslider { background:rgba(52,211,153,0.25); }
-.toggle input:checked ~ .tslider::before { transform:translateX(14px); background:var(--success); box-shadow:0 0 4px var(--success); }
-
-.fcard-body { padding:0 10px 10px; display:flex; flex-direction:column; gap:7px; }
-
-.fcard.collapsed .fcard-body { display:none; }
-
-.prow {
-  display:flex; align-items:center; gap:7px;
-}
-
-.plbl { font-size:0.65rem; color:var(--muted); font-family:var(--mono); min-width:52px; }
-
-.pval {
-  font-family:var(--mono);
-  font-size:0.65rem;
-  color:var(--accent);
-  min-width:46px;
-  text-align:right;
-}
-
-input[type=range] {
-  -webkit-appearance:none;
-  flex:1; height:3px;
-  background:var(--border);
-  border-radius:2px;
-  outline:none;
-}
-input[type=range]::-webkit-slider-thumb {
-  -webkit-appearance:none;
-  width:11px; height:11px;
-  border-radius:50%;
-  background:var(--accent);
-  cursor:pointer;
-  box-shadow:0 0 5px var(--accent);
-  transition:transform 0.1s;
-}
-input[type=range]::-webkit-slider-thumb:hover { transform:scale(1.4); }
-
-input[type=number] {
-  background:var(--bg3);
-  border:1px solid var(--border2);
-  color:var(--accent);
-  font-family:var(--mono);
-  font-size:0.68rem;
-  padding:3px 6px;
-  border-radius:4px;
-  width:70px;
-  outline:none;
-  transition:border-color 0.15s;
-}
-input[type=number]:focus { border-color:var(--accent); }
-
-.add-notch-btn {
-  width:100%;
-  padding:6px;
-  background:rgba(56,189,248,0.05);
-  border:1px dashed var(--border2);
-  border-radius:6px;
-  color:var(--muted);
-  font-family:var(--mono);
-  font-size:0.65rem;
-  cursor:pointer;
-  transition:all 0.15s;
-  text-align:center;
-}
-.add-notch-btn:hover { border-color:var(--accent); color:var(--accent); }
-
-.del-btn {
-  width:16px; height:16px;
-  background:rgba(251,113,133,0.1);
-  border:1px solid rgba(251,113,133,0.3);
-  color:var(--danger);
-  border-radius:3px;
-  cursor:pointer;
-  font-size:0.6rem;
-  display:flex; align-items:center; justify-content:center;
-  transition:all 0.15s;
-  flex-shrink:0;
-}
-.del-btn:hover { background:rgba(251,113,133,0.2); }
-
-/* Pipeline order */
-.pipeline-order {
-  display:flex; flex-direction:column; gap:4px;
-}
-
-.po-item {
-  display:flex; align-items:center; gap:6px;
-  padding:5px 8px;
-  background:var(--bg3);
-  border:1px solid var(--border);
-  border-radius:5px;
-  font-family:var(--mono);
-  font-size:0.65rem;
-  color:var(--muted);
-  cursor:grab;
-}
-
-.po-item.active { color:var(--text); border-color:var(--border2); }
-
-/* ── CHANNELS / STATS panel ── */
-.metrics-grid {
-  display:grid;
-  grid-template-columns:1fr 1fr;
-  gap:6px;
-}
-
-.metric {
-  background:var(--bg3);
-  border:1px solid var(--border);
-  border-radius:6px;
-  padding:8px 10px;
-}
-.metric .mv { font-family:var(--mono); font-size:0.9rem; color:var(--accent); }
-.metric .ml { font-size:0.6rem; color:var(--muted); text-transform:uppercase; letter-spacing:1px; margin-top:1px; }
-
-/* SNR bar */
-.snr-bar { height:6px; border-radius:3px; background:var(--border); overflow:hidden; margin-top:6px; }
-.snr-fill { height:100%; border-radius:3px; transition:width 0.5s; }
-
-/* ── CENTER: CHART AREA ── */
-.chart-area {
-  flex:1;
-  display:flex;
-  flex-direction:column;
-  overflow:hidden;
-  background:var(--bg);
-}
-
-/* Stage toolbar */
-.stage-toolbar {
-  display:flex;
-  align-items:center;
-  gap:6px;
-  padding:8px 12px;
-  border-bottom:1px solid var(--border);
-  background:var(--bg2);
-  flex-shrink:0;
-  overflow-x:auto;
-}
-
-.stage-toolbar::-webkit-scrollbar { height:2px; }
-.stage-toolbar::-webkit-scrollbar-thumb { background:var(--border); }
-
-.stage-btn {
-  display:flex; align-items:center; gap:5px;
-  padding:5px 10px;
-  border-radius:5px;
-  border:1px solid var(--border);
-  background:transparent;
-  font-family:var(--mono);
-  font-size:0.62rem;
-  color:var(--muted);
-  cursor:pointer;
-  transition:all 0.15s;
-  white-space:nowrap;
-  flex-shrink:0;
-}
-
-.stage-btn:hover { border-color:var(--border2); color:var(--text); }
-
-.stage-btn.pinned {
-  border-color: transparent;
-  color: white;
-  font-weight:500;
-}
-
-.stage-btn.mini {
-  padding:3px 8px;
-  font-size:0.58rem;
-  opacity:0.5;
-}
-
-.stage-btn.hidden-stage { opacity:0.2; }
-
-.stage-btn .sdot { width:6px; height:6px; border-radius:50%; flex-shrink:0; }
-
-.stb-spacer { flex:1; }
-
-.view-btns { display:flex; gap:4px; }
-
-.vbtn {
-  padding:4px 8px;
-  background:var(--bg3);
-  border:1px solid var(--border);
-  border-radius:4px;
-  color:var(--muted);
-  font-family:var(--mono);
-  font-size:0.6rem;
-  cursor:pointer;
-  transition:all 0.15s;
-}
-
-.vbtn:hover { color:var(--text); border-color:var(--border2); }
-.vbtn.active { color:var(--accent); border-color:var(--accent); background:rgba(56,189,248,0.06); }
-
-/* Charts container */
-.charts-wrap {
-  flex:1;
-  overflow-y:auto;
-  overflow-x:hidden;
-  padding:8px;
-  display:flex;
-  flex-direction:column;
-  gap:6px;
-}
-
-.charts-wrap::-webkit-scrollbar { width:4px; }
-.charts-wrap::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
-
-/* Chart panels */
-.cpanel {
-  background:var(--panel);
-  border:1px solid var(--border);
-  border-radius:8px;
-  overflow:hidden;
-  transition:all 0.2s;
-  flex-shrink:0;
-}
-
-.cpanel.pinned { border-color:var(--border2); flex:1; min-height:0; }
-.cpanel.mini-panel { height:48px; overflow:hidden; cursor:pointer; border-color:var(--border); }
-.cpanel.mini-panel:hover { border-color:var(--border2); }
-.cpanel.hidden-panel { display:none; }
-
-.cpanel-header {
-  display:flex;
-  align-items:center;
-  gap:8px;
-  padding:7px 12px;
-  border-bottom:1px solid var(--border);
-  flex-shrink:0;
-}
-
-.cpanel.mini-panel .cpanel-header { border-bottom:none; }
-
-.ch-title {
-  font-family:var(--mono);
-  font-size:0.65rem;
-  color:var(--muted);
-  letter-spacing:1px;
-  text-transform:uppercase;
-  flex:1;
-}
-
-.cpanel.pinned .ch-title { color:var(--text); }
-
-.ch-badges { display:flex; gap:4px; align-items:center; }
-
-.badge {
-  font-family:var(--mono);
-  font-size:0.58rem;
-  padding:2px 6px;
-  border-radius:3px;
-  border:1px solid;
-}
-
-.badge-info  { color:var(--accent); border-color:rgba(56,189,248,0.3); background:rgba(56,189,248,0.08); }
-.badge-warn  { color:var(--warn); border-color:rgba(250,204,21,0.3); background:rgba(250,204,21,0.08); }
-.badge-ok    { color:var(--success); border-color:rgba(52,211,153,0.3); background:rgba(52,211,153,0.08); }
-.badge-err   { color:var(--danger); border-color:rgba(251,113,133,0.3); background:rgba(251,113,133,0.08); }
-
-.cpanel-canvas {
-  padding:4px 10px 8px;
-  position:relative;
-}
-
-/* Mini sparkline */
-.mini-spark {
-  height:24px;
-  padding:2px 10px;
-}
-
-/* ── RIGHT PANEL ── */
-.right-panel {
-  width:220px;
-  flex-shrink:0;
-  background:var(--bg2);
-  border-left:1px solid var(--border);
-  display:flex;
-  flex-direction:column;
-  overflow:hidden;
-}
-
-.rp-section {
-  padding:12px;
-  border-bottom:1px solid var(--border);
-  display:flex;
-  flex-direction:column;
-  gap:8px;
-}
-
-.rp-title {
-  font-family:var(--mono);
-  font-size:0.6rem;
-  letter-spacing:2px;
-  text-transform:uppercase;
-  color:var(--muted);
-}
-
-/* Frequency domain */
-.freq-panel { flex:1; padding:10px; display:flex; flex-direction:column; gap:6px; overflow:hidden; }
-
-/* Overlay comparison */
-.overlay-toggle {
-  display:flex; gap:6px; flex-wrap:wrap;
-}
-
-.ov-chip {
-  padding:3px 7px;
-  border-radius:4px;
-  border:1px solid var(--border);
-  font-family:var(--mono);
-  font-size:0.62rem;
-  color:var(--muted);
-  cursor:pointer;
-  transition:all 0.15s;
-  display:flex; align-items:center; gap:4px;
-}
-
-.ov-chip:hover { border-color:var(--border2); color:var(--text); }
-.ov-chip.on { color:white; }
-
-/* Cursor readout */
-.cursor-readout {
-  background:var(--bg3);
-  border:1px solid var(--border);
-  border-radius:6px;
-  padding:8px;
-  font-family:var(--mono);
-  font-size:0.62rem;
-  display:flex;
-  flex-direction:column;
-  gap:3px;
-}
-
-.cr-row { display:flex; justify-content:space-between; }
-.cr-lbl { color:var(--muted); }
-.cr-val { color:var(--accent); }
-
-/* Processing log */
-.proc-log {
-  flex:1;
-  overflow-y:auto;
-  font-family:var(--mono);
-  font-size:0.6rem;
-  color:var(--muted);
-  display:flex;
-  flex-direction:column;
-  gap:3px;
-  padding:8px;
-}
-
-.proc-log::-webkit-scrollbar { width:2px; }
-.proc-log::-webkit-scrollbar-thumb { background:var(--border); }
-
-.log-line { display:flex; gap:6px; }
-.log-time { color:var(--border2); flex-shrink:0; }
-.log-ok   { color:var(--success); }
-.log-info { color:var(--accent); }
-.log-warn { color:var(--warn); }
-
-/* Empty state */
-.empty-overlay {
-  position:absolute;
-  inset:0;
-  display:flex;
-  flex-direction:column;
-  align-items:center;
-  justify-content:center;
-  gap:16px;
-  z-index:10;
-}
-
-.empty-icon {
-  font-size:3.5rem;
-  opacity:0.15;
-  animation: float 3s ease-in-out infinite;
-}
-@keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-8px)} }
-
-.empty-text { font-size:0.8rem; color:var(--muted); text-align:center; line-height:1.7; }
-
-/* Zoom/pan controls */
-.zp-controls {
-  display:flex;
-  gap:4px;
-  align-items:center;
-  padding:6px 10px;
-  border-top:1px solid var(--border);
-  background:var(--bg2);
-  flex-shrink:0;
-}
-
-.zp-controls .plbl { color:var(--muted); font-family:var(--mono); font-size:0.62rem; }
-
-.zp-slider { width:120px; }
-
-#fileInput { display:none; }
-
-/* Tooltip override */
-.chartjs-tooltip {
-  background:var(--panel2) !important;
-  border:1px solid var(--border2) !important;
-}
-
-/* Frequency response curve in filter card */
-.freq-mini {
-  height:40px;
-  margin-top:4px;
-  border-radius:4px;
-  overflow:hidden;
-  background:var(--bg3);
-  border:1px solid var(--border);
-}
-
-/* Pipeline visualization */
-.pipeline-viz {
-  display:flex;
-  align-items:center;
-  gap:2px;
-  padding:6px 8px;
-  background:var(--bg3);
-  border:1px solid var(--border);
-  border-radius:6px;
-  overflow-x:auto;
-}
-
-.pipeline-viz::-webkit-scrollbar { height:2px; }
-.pipeline-viz::-webkit-scrollbar-thumb { background:var(--border); }
-
-.pv-node {
-  display:flex;
-  flex-direction:column;
-  align-items:center;
-  gap:2px;
-  padding:3px 6px;
-  border-radius:4px;
-  border:1px solid var(--border);
-  font-family:var(--mono);
-  font-size:0.55rem;
-  color:var(--muted);
-  min-width:38px;
-  text-align:center;
-  flex-shrink:0;
-  cursor:pointer;
-  transition:all 0.15s;
-}
-
-.pv-node.active { color:var(--text); }
-
-.pv-arrow {
-  color:var(--muted);
-  font-size:0.6rem;
-  flex-shrink:0;
-}
-
-/* Annotation markers */
-.annotation-panel {
-  padding:10px;
-  border-bottom:1px solid var(--border);
-}
-
-select {
-  background:var(--bg3);
-  border:1px solid var(--border2);
-  color:var(--text);
-  font-family:var(--mono);
-  font-size:0.65rem;
-  padding:4px 7px;
-  border-radius:4px;
-  outline:none;
-  width:100%;
-  cursor:pointer;
-}
-
-select:focus { border-color:var(--accent); }
-
-/* Responsive: hide right panel on smaller screens */
-@media (max-width:1100px) {
-  .right-panel { display:none; }
-}
-
-/* ── OSCILLOSCOPE GRID BACKGROUND for charts ── */
-.osc-bg {
-  background-image:
-    linear-gradient(rgba(56,189,248,0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(56,189,248,0.04) 1px, transparent 1px),
-    linear-gradient(rgba(56,189,248,0.02) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(56,189,248,0.02) 1px, transparent 1px);
-  background-size: 50px 50px, 50px 50px, 10px 10px, 10px 10px;
-  background-position: -1px -1px, -1px -1px, -1px -1px, -1px -1px;
-  border-radius:4px;
-}
-
-/* Playhead cursor line */
-.crosshair-info {
-  position:absolute;
-  top:8px; right:12px;
-  font-family:var(--mono);
-  font-size:0.6rem;
-  color:var(--accent);
-  pointer-events:none;
-}
-
-/* Notch count badge */
-.notch-count {
-  background:rgba(52,211,153,0.15);
-  color:var(--success);
-  font-family:var(--mono);
-  font-size:0.58rem;
-  padding:1px 5px;
-  border-radius:3px;
-  margin-left:auto;
-}
-
-/* ── Noise/SNR meter ── */
-.noise-meter {
-  display:flex; gap:3px; align-items:flex-end; height:16px;
-}
-.noise-bar {
-  width:4px; border-radius:1px;
-  transition:height 0.3s, background 0.3s;
-}
-
-/* Keyboard shortcut hints */
-.kbd {
-  background:var(--bg3);
-  border:1px solid var(--border2);
-  border-radius:3px;
-  padding:1px 4px;
-  font-family:var(--mono);
-  font-size:0.58rem;
-  color:var(--muted);
-}
-
-/* Loading spinner */
-.spinner {
-  width:16px; height:16px;
-  border:2px solid var(--border);
-  border-top-color:var(--accent);
-  border-radius:50%;
-  animation:spin 0.6s linear infinite;
-}
-@keyframes spin { to{transform:rotate(360deg)} }
-
-/* ── TOOLTIP OVERLAY ── */
-.global-tooltip {
-  position:fixed;
-  background:var(--panel2);
-  border:1px solid var(--border2);
-  border-radius:6px;
-  padding:8px 10px;
-  font-family:var(--mono);
-  font-size:0.65rem;
-  color:var(--text);
-  pointer-events:none;
-  z-index:1000;
-  display:none;
-  box-shadow:0 4px 20px rgba(0,0,0,0.5);
-}
-
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NeuroLab Pro — Biosignal Analysis Suite</title>
+  <link rel="manifest" href="./manifest.json" />
+  <meta name="theme-color" content="#060810" />
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Syne:wght@400;600;700;800&display=swap');
+
+    :root {
+      --bg: #060810;
+      --bg2: #0b0e18;
+      --bg3: #0f1420;
+      --panel: #111827;
+      --panel2: #161e2e;
+      --border: #1f2d42;
+      --border2: #2a3a52;
+      --c0: #38bdf8;
+      --c1: #facc15;
+      --c2: #f97316;
+      --c3: #a78bfa;
+      --c4: #34d399;
+      --c5: #fb7185;
+      --c6: #60a5fa;
+      --c7: #fbbf24;
+      --accent: #38bdf8;
+      --success: #34d399;
+      --warn: #facc15;
+      --danger: #fb7185;
+      --text: #cbd5e1;
+      --muted: #4a5f78;
+      --mono: 'JetBrains Mono', monospace;
+      --sans: 'Syne', sans-serif;
+    }
+
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Scanline */
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 9999;
+      background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0, 0, 0, 0.05) 2px, rgba(0, 0, 0, 0.05) 4px);
+    }
+
+    .bg-glow {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 0;
+      background:
+        radial-gradient(ellipse 70% 50% at 15% 20%, rgba(56, 189, 248, .05) 0%, transparent 70%),
+        radial-gradient(ellipse 50% 60% at 85% 70%, rgba(167, 139, 250, .04) 0%, transparent 70%),
+        radial-gradient(ellipse 40% 30% at 50% 100%, rgba(52, 211, 153, .03) 0%, transparent 60%);
+    }
+
+    /* ── TOPBAR ── */
+    .topbar {
+      height: 52px;
+      background: var(--bg2);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 14px;
+      gap: 12px;
+      flex-shrink: 0;
+      position: relative;
+      z-index: 100;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-right: 4px;
+    }
+
+    .logo-mark {
+      width: 28px;
+      height: 28px;
+      flex-shrink: 0;
+    }
+
+    .logo-mark svg {
+      width: 100%;
+      height: 100%;
+    }
+
+    .logo-text {
+      font-family: var(--sans);
+      font-weight: 800;
+      font-size: .95rem;
+      letter-spacing: -.5px;
+      color: #fff;
+      line-height: 1;
+    }
+
+    .logo-text span {
+      color: var(--accent);
+    }
+
+    .logo-sub {
+      font-family: var(--mono);
+      font-size: .55rem;
+      color: var(--muted);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-top: 1px;
+    }
+
+    .divider-v {
+      width: 1px;
+      height: 26px;
+      background: var(--border);
+      flex-shrink: 0;
+    }
+
+    .top-drop {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 5px 12px;
+      border: 1px dashed var(--border2);
+      border-radius: 6px;
+      cursor: pointer;
+      transition: .2s;
+      font-size: .7rem;
+      font-family: var(--mono);
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .top-drop:hover,
+    .top-drop.drag {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: rgba(56, 189, 248, .05);
+    }
+
+    .top-stats {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .stat-chip {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 3px 7px;
+      font-family: var(--mono);
+      font-size: .62rem;
+    }
+
+    .stat-chip .lbl {
+      color: var(--muted);
+    }
+
+    .stat-chip .val {
+      color: var(--accent);
+    }
+
+    .top-right {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 5px 11px;
+      border-radius: 5px;
+      font-family: var(--mono);
+      font-size: .65rem;
+      letter-spacing: .5px;
+      border: 1px solid;
+      cursor: pointer;
+      transition: .15s;
+      white-space: nowrap;
+    }
+
+    .btn-ghost {
+      background: transparent;
+      border-color: var(--border2);
+      color: var(--muted);
+    }
+
+    .btn-ghost:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: rgba(56, 189, 248, .05);
+    }
+
+    .btn-primary {
+      background: rgba(56, 189, 248, .1);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .btn-primary:hover {
+      background: rgba(56, 189, 248, .2);
+      box-shadow: 0 0 12px rgba(56, 189, 248, .2);
+    }
+
+    .btn-success {
+      background: rgba(52, 211, 153, .1);
+      border-color: var(--success);
+      color: var(--success);
+    }
+
+    .btn-success:hover {
+      background: rgba(52, 211, 153, .2);
+    }
+
+    .btn:disabled {
+      opacity: .25;
+      cursor: not-allowed;
+      pointer-events: none;
+    }
+
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--muted);
+      flex-shrink: 0;
+    }
+
+    .status-dot.live {
+      background: var(--success);
+      box-shadow: 0 0 6px var(--success);
+      animation: blink 1.5s infinite;
+    }
+
+    .status-dot.warn {
+      background: var(--warn);
+      box-shadow: 0 0 6px var(--warn);
+    }
+
+    @keyframes blink {
+
+      0%,
+      100% {
+        opacity: 1
+      }
+
+      50% {
+        opacity: .4
+      }
+    }
+
+    /* ── WORKSPACE ── */
+    .workspace {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* ── LEFT SIDEBAR  (280px) ── */
+    .sidebar {
+      width: 280px;
+      flex-shrink: 0;
+      background: var(--bg2);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .sidebar-tabs {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .stab {
+      flex: 1;
+      padding: 8px 2px;
+      text-align: center;
+      font-family: var(--mono);
+      font-size: .58rem;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--muted);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: .15s;
+    }
+
+    .stab:hover {
+      color: var(--text);
+    }
+
+    .stab.active {
+      color: var(--accent);
+      border-color: var(--accent);
+    }
+
+    .sidebar-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 13px;
+      display: flex;
+      flex-direction: column;
+      gap: 13px;
+    }
+
+    .sidebar-body::-webkit-scrollbar {
+      width: 3px;
+    }
+
+    .sidebar-body::-webkit-scrollbar-thumb {
+      background: var(--border);
+    }
+
+    .sb-section {
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+    }
+
+    .sb-label {
+      font-family: var(--mono);
+      font-size: .56rem;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .sb-label::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    /* Filter cards */
+    .fcard {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      overflow: hidden;
+    }
+
+    .fcard-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .fcard-header:hover {
+      background: rgba(255, 255, 255, .02);
+    }
+
+    .fcard-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .fcard-name {
+      font-family: var(--mono);
+      font-size: .7rem;
+      color: var(--text);
+      flex: 1;
+    }
+
+    .fcard-order {
+      font-family: var(--mono);
+      font-size: .58rem;
+      color: var(--muted);
+    }
+
+    .fcard.collapsed .fcard-body {
+      display: none;
+    }
+
+    .toggle {
+      position: relative;
+      width: 28px;
+      height: 15px;
+      flex-shrink: 0;
+    }
+
+    .toggle input {
+      display: none;
+    }
+
+    .tslider {
+      position: absolute;
+      inset: 0;
+      background: var(--border);
+      border-radius: 8px;
+      cursor: pointer;
+      transition: .2s;
+    }
+
+    .tslider::before {
+      content: '';
+      position: absolute;
+      width: 9px;
+      height: 9px;
+      left: 3px;
+      top: 3px;
+      background: var(--muted);
+      border-radius: 50%;
+      transition: .2s;
+    }
+
+    .toggle input:checked~.tslider {
+      background: rgba(52, 211, 153, .25);
+    }
+
+    .toggle input:checked~.tslider::before {
+      transform: translateX(13px);
+      background: var(--success);
+      box-shadow: 0 0 4px var(--success);
+    }
+
+    .fcard-body {
+      padding: 0 10px 9px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .prow {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .plbl {
+      font-size: .63rem;
+      color: var(--muted);
+      font-family: var(--mono);
+      min-width: 54px;
+    }
+
+    input[type=range] {
+      -webkit-appearance: none;
+      flex: 1;
+      height: 3px;
+      background: var(--border);
+      border-radius: 2px;
+      outline: none;
+    }
+
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+      background: var(--accent);
+      cursor: pointer;
+      box-shadow: 0 0 5px var(--accent);
+      transition: transform .1s;
+    }
+
+    input[type=range]::-webkit-slider-thumb:hover {
+      transform: scale(1.4);
+    }
+
+    input[type=number],
+    select {
+      background: var(--bg3);
+      border: 1px solid var(--border2);
+      color: var(--accent);
+      font-family: var(--mono);
+      font-size: .66rem;
+      padding: 3px 5px;
+      border-radius: 4px;
+      width: 68px;
+      outline: none;
+      transition: border-color .15s;
+    }
+
+    select {
+      width: auto;
+      flex: 1;
+      cursor: pointer;
+    }
+
+    input[type=number]:focus,
+    select:focus {
+      border-color: var(--accent);
+    }
+
+    .add-notch-btn {
+      width: 100%;
+      padding: 5px;
+      background: rgba(56, 189, 248, .05);
+      border: 1px dashed var(--border2);
+      border-radius: 6px;
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: .62rem;
+      cursor: pointer;
+      transition: .15s;
+      text-align: center;
+    }
+
+    .add-notch-btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .del-btn {
+      width: 15px;
+      height: 15px;
+      background: rgba(251, 113, 133, .1);
+      border: 1px solid rgba(251, 113, 133, .3);
+      color: var(--danger);
+      border-radius: 3px;
+      cursor: pointer;
+      font-size: .58rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: .15s;
+      flex-shrink: 0;
+    }
+
+    .del-btn:hover {
+      background: rgba(251, 113, 133, .2);
+    }
+
+    /* Pipeline */
+    .pipeline-order {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .po-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 7px;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      font-family: var(--mono);
+      font-size: .62rem;
+      color: var(--muted);
+    }
+
+    .po-item.active {
+      color: var(--text);
+      border-color: var(--border2);
+    }
+
+    /* Metrics */
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 5px;
+    }
+
+    .metric {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      padding: 7px 9px;
+    }
+
+    .metric .mv {
+      font-family: var(--mono);
+      font-size: .85rem;
+      color: var(--accent);
+    }
+
+    .metric .ml {
+      font-size: .58rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-top: 1px;
+    }
+
+    .snr-bar {
+      height: 5px;
+      border-radius: 3px;
+      background: var(--border);
+      overflow: hidden;
+      margin-top: 5px;
+    }
+
+    .snr-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width .5s;
+    }
+
+    /* ── Analysis tab ── */
+    .band-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .band-row {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-family: var(--mono);
+      font-size: .62rem;
+    }
+
+    .band-lbl {
+      color: var(--muted);
+      min-width: 42px;
+    }
+
+    .band-bar-wrap {
+      flex: 1;
+      height: 5px;
+      background: var(--border);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .band-bar {
+      height: 100%;
+      border-radius: 3px;
+      transition: width .4s;
+      min-width: 2px;
+    }
+
+    .band-pct {
+      color: var(--accent);
+      min-width: 42px;
+      text-align: right;
+    }
+
+    .bpm-display {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+    }
+
+    .bpm-val {
+      font-family: var(--mono);
+      font-size: 1.8rem;
+      color: var(--success);
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    .bpm-lbl {
+      font-family: var(--mono);
+      font-size: .58rem;
+      color: var(--muted);
+      letter-spacing: 2px;
+    }
+
+    .hrv-row {
+      display: flex;
+      justify-content: space-between;
+      width: 100%;
+      font-family: var(--mono);
+      font-size: .62rem;
+    }
+
+    .analysis-sel {
+      background: var(--bg3);
+      border: 1px solid var(--border2);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: .62rem;
+      padding: 4px 7px;
+      border-radius: 5px;
+      width: 100%;
+      outline: none;
+      cursor: pointer;
+    }
+
+    /* ── CENTER ── */
+    .chart-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      background: var(--bg);
+      min-width: 0;
+    }
+
+    .stage-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 7px 10px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg2);
+      flex-shrink: 0;
+      overflow-x: auto;
+    }
+
+    .stage-toolbar::-webkit-scrollbar {
+      height: 2px;
+    }
+
+    .stage-toolbar::-webkit-scrollbar-thumb {
+      background: var(--border);
+    }
+
+    .stage-btn {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 9px;
+      border-radius: 5px;
+      border: 1px solid var(--border);
+      background: transparent;
+      font-family: var(--mono);
+      font-size: .6rem;
+      color: var(--muted);
+      cursor: pointer;
+      transition: .15s;
+      white-space: nowrap;
+      flex-shrink: 0;
+      user-select: none;
+    }
+
+    .stage-btn:hover {
+      border-color: var(--border2);
+      color: var(--text);
+    }
+
+    .stage-btn.pinned {
+      font-weight: 600;
+    }
+
+    .stage-btn.hidden-stage {
+      opacity: .2;
+    }
+
+    .stage-btn .sdot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .stb-spacer {
+      flex: 1;
+      min-width: 8px;
+    }
+
+    .view-btns {
+      display: flex;
+      gap: 3px;
+    }
+
+    .vbtn {
+      padding: 3px 7px;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: .58rem;
+      cursor: pointer;
+      transition: .15s;
+      white-space: nowrap;
+    }
+
+    .vbtn:hover {
+      color: var(--text);
+      border-color: var(--border2);
+    }
+
+    .vbtn.active {
+      color: var(--accent);
+      border-color: var(--accent);
+      background: rgba(56, 189, 248, .06);
+    }
+
+    .charts-wrap {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding: 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .charts-wrap::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    .charts-wrap::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 2px;
+    }
+
+    .cpanel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      overflow: hidden;
+      transition: all .2s;
+      flex-shrink: 0;
+    }
+
+    .cpanel.pinned {
+      border-color: var(--border2);
+    }
+
+    .cpanel.mini-panel {
+      height: 42px;
+      overflow: hidden;
+      cursor: pointer;
+    }
+
+    .cpanel.mini-panel:hover {
+      border-color: var(--border2);
+    }
+
+    .cpanel.hidden-panel {
+      display: none;
+    }
+
+    .cpanel-header {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 6px 11px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .cpanel.mini-panel .cpanel-header {
+      border-bottom: none;
+    }
+
+    .ch-title {
+      font-family: var(--mono);
+      font-size: .63rem;
+      color: var(--muted);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      flex: 1;
+    }
+
+    .cpanel.pinned .ch-title {
+      color: var(--text);
+    }
+
+    .ch-badges {
+      display: flex;
+      gap: 4px;
+      align-items: center;
+    }
+
+    .badge {
+      font-family: var(--mono);
+      font-size: .56rem;
+      padding: 2px 5px;
+      border-radius: 3px;
+      border: 1px solid;
+    }
+
+    .badge-info {
+      color: var(--accent);
+      border-color: rgba(56, 189, 248, .3);
+      background: rgba(56, 189, 248, .08);
+    }
+
+    .badge-warn {
+      color: var(--warn);
+      border-color: rgba(250, 204, 21, .3);
+      background: rgba(250, 204, 21, .08);
+    }
+
+    .badge-ok {
+      color: var(--success);
+      border-color: rgba(52, 211, 153, .3);
+      background: rgba(52, 211, 153, .08);
+    }
+
+    .badge-err {
+      color: var(--danger);
+      border-color: rgba(251, 113, 133, .3);
+      background: rgba(251, 113, 133, .08);
+    }
+
+    .cpanel-canvas {
+      padding: 3px 8px 7px;
+      position: relative;
+    }
+
+    /* Annotation markers */
+    .annot-layer {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: 5;
+    }
+
+    .annot-marker {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: rgba(250, 204, 21, .6);
+      pointer-events: auto;
+      cursor: pointer;
+    }
+
+    .annot-marker::after {
+      content: attr(data-label);
+      position: absolute;
+      top: 3px;
+      left: 4px;
+      font-family: var(--mono);
+      font-size: .55rem;
+      color: var(--warn);
+      background: rgba(10, 14, 24, .8);
+      padding: 1px 4px;
+      border-radius: 3px;
+      white-space: nowrap;
+    }
+
+    /* ── ZOOM BAR ── */
+    .zp-controls {
+      display: flex;
+      gap: 5px;
+      align-items: center;
+      padding: 5px 10px;
+      border-top: 1px solid var(--border);
+      background: var(--bg2);
+      flex-shrink: 0;
+    }
+
+    .zp-controls .plbl {
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: .6rem;
+    }
+
+    .zp-slider {
+      width: 110px;
+    }
+
+    /* ── RIGHT PANEL (260px) ── */
+    .right-panel {
+      width: 260px;
+      flex-shrink: 0;
+      background: var(--bg2);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .rp-section {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+    }
+
+    .rp-title {
+      font-family: var(--mono);
+      font-size: .58rem;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .freq-panel {
+      flex: 1;
+      padding: 8px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      overflow: hidden;
+      min-height: 0;
+    }
+
+    .cursor-readout {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 7px;
+      font-family: var(--mono);
+      font-size: .6rem;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .cr-row {
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .cr-lbl {
+      color: var(--muted);
+    }
+
+    .cr-val {
+      color: var(--accent);
+    }
+
+    .proc-log {
+      flex: 1;
+      overflow-y: auto;
+      font-family: var(--mono);
+      font-size: .58rem;
+      color: var(--muted);
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      padding: 7px;
+    }
+
+    .proc-log::-webkit-scrollbar {
+      width: 2px;
+    }
+
+    .proc-log::-webkit-scrollbar-thumb {
+      background: var(--border);
+    }
+
+    .log-line {
+      display: flex;
+      gap: 5px;
+    }
+
+    .log-time {
+      color: var(--border2);
+      flex-shrink: 0;
+    }
+
+    .log-ok {
+      color: var(--success);
+    }
+
+    .log-info {
+      color: var(--accent);
+    }
+
+    .log-warn {
+      color: var(--warn);
+    }
+
+    /* Empty state */
+    .empty-overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      z-index: 10;
+    }
+
+    .empty-icon {
+      font-size: 3.2rem;
+      opacity: .15;
+      animation: float 3s ease-in-out infinite;
+    }
+
+    @keyframes float {
+
+      0%,
+      100% {
+        transform: translateY(0)
+      }
+
+      50% {
+        transform: translateY(-8px)
+      }
+    }
+
+    .empty-text {
+      font-size: .78rem;
+      color: var(--muted);
+      text-align: center;
+      line-height: 1.8;
+    }
+
+    /* OSC grid */
+    .osc-bg {
+      background-image:
+        linear-gradient(rgba(56, 189, 248, .04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(56, 189, 248, .04) 1px, transparent 1px),
+        linear-gradient(rgba(56, 189, 248, .02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(56, 189, 248, .02) 1px, transparent 1px);
+      background-size: 50px 50px, 50px 50px, 10px 10px, 10px 10px;
+      background-position: -1px -1px, -1px -1px, -1px -1px, -1px -1px;
+    }
+
+    /* Notch badge */
+    .notch-count {
+      background: rgba(52, 211, 153, .15);
+      color: var(--success);
+      font-family: var(--mono);
+      font-size: .56rem;
+      padding: 1px 5px;
+      border-radius: 3px;
+      margin-left: auto;
+    }
+
+    .kbd {
+      background: var(--bg3);
+      border: 1px solid var(--border2);
+      border-radius: 3px;
+      padding: 1px 4px;
+      font-family: var(--mono);
+      font-size: .56rem;
+      color: var(--muted);
+    }
+
+    /* Spinner */
+    .spinner {
+      width: 14px;
+      height: 14px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin .6s linear infinite;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg)
+      }
+    }
+
+    /* Global tooltip */
+    .global-tooltip {
+      position: fixed;
+      background: var(--panel2);
+      border: 1px solid var(--border2);
+      border-radius: 6px;
+      padding: 7px 9px;
+      font-family: var(--mono);
+      font-size: .63rem;
+      color: var(--text);
+      pointer-events: none;
+      z-index: 1000;
+      display: none;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, .5);
+    }
+
+    /* Help modal */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(6, 8, 16, .85);
+      z-index: 2000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal-overlay.open {
+      display: flex;
+    }
+
+    .modal {
+      background: var(--panel2);
+      border: 1px solid var(--border2);
+      border-radius: 10px;
+      padding: 24px;
+      max-width: 540px;
+      width: 90%;
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+
+    .modal h2 {
+      font-family: var(--sans);
+      font-size: 1.1rem;
+      color: var(--accent);
+      margin-bottom: 16px;
+    }
+
+    .shortcut-grid {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 6px 16px;
+      font-family: var(--mono);
+      font-size: .68rem;
+    }
+
+    .shortcut-grid span:nth-child(odd) {
+      color: var(--accent);
+    }
+
+    .shortcut-grid span:nth-child(even) {
+      color: var(--muted);
+    }
+
+    .modal-close {
+      float: right;
+      cursor: pointer;
+      color: var(--muted);
+      font-size: 1.1rem;
+      line-height: 1;
+    }
+
+    .modal-close:hover {
+      color: var(--danger);
+    }
+
+    /* Export menu */
+    .export-menu {
+      position: fixed;
+      background: var(--panel2);
+      border: 1px solid var(--border2);
+      border-radius: 7px;
+      padding: 5px;
+      z-index: 500;
+      display: none;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 160px;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, .5);
+    }
+
+    .export-menu.open {
+      display: flex;
+    }
+
+    .em-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 10px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-family: var(--mono);
+      font-size: .66rem;
+      color: var(--muted);
+      transition: .12s;
+    }
+
+    .em-item:hover {
+      background: rgba(56, 189, 248, .07);
+      color: var(--accent);
+    }
+
+    /* Annotation add button */
+    .annot-btn {
+      padding: 3px 8px;
+      background: rgba(250, 204, 21, .08);
+      border: 1px solid rgba(250, 204, 21, .3);
+      color: var(--warn);
+      font-family: var(--mono);
+      font-size: .6rem;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: .15s;
+    }
+
+    .annot-btn:hover {
+      background: rgba(250, 204, 21, .15);
+    }
+
+    .annot-btn.active {
+      background: rgba(250, 204, 21, .2);
+      box-shadow: 0 0 8px rgba(250, 204, 21, .3);
+    }
+
+    /* Spectrogram canvas container */
+    .spec-wrap {
+      flex: 1;
+      min-height: 100px;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* R-peak indicator */
+    .rpeak-indicator {
+      position: absolute;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--danger);
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      box-shadow: 0 0 5px var(--danger);
+    }
+
+    @media (max-width:1200px) {
+      .right-panel {
+        display: none;
+      }
+    }
+
+    @media (max-width:900px) {
+      .sidebar {
+        width: 220px;
+      }
+    }
+
+    #fileInput {
+      display: none;
+    }
+  </style>
 </head>
+
 <body>
-<div class="bg-glow"></div>
-<div id="globalTooltip" class="global-tooltip"></div>
-<input type="file" id="fileInput" accept=".csv,.txt,.dat">
+  <div class="bg-glow"></div>
+  <div id="globalTooltip" class="global-tooltip"></div>
+  <input type="file" id="fileInput" accept=".csv,.txt,.dat,.tsv" multiple />
 
-<!-- ── TOPBAR ── -->
-<div class="topbar">
-  <div class="logo">
-    <div class="logo-mark">
-      <svg viewBox="0 0 30 30" fill="none">
-        <rect x="1" y="1" width="28" height="28" rx="4" stroke="#38bdf8" stroke-width="1.5"/>
-        <rect x="6" y="6" width="8" height="8" rx="2" fill="#38bdf8" opacity="0.8"/>
-        <rect x="16" y="6" width="8" height="8" rx="2" fill="#a78bfa" opacity="0.6"/>
-        <rect x="6" y="16" width="8" height="8" rx="2" fill="#34d399" opacity="0.6"/>
-        <rect x="16" y="16" width="8" height="8" rx="2" fill="#f97316" opacity="0.6"/>
-        <!-- pins -->
-        <line x1="1" y1="10" x2="0" y2="10" stroke="#38bdf8" stroke-width="1.5"/>
-        <line x1="1" y1="20" x2="0" y2="20" stroke="#38bdf8" stroke-width="1.5"/>
-        <line x1="29" y1="10" x2="30" y2="10" stroke="#38bdf8" stroke-width="1.5"/>
-        <line x1="29" y1="20" x2="30" y2="20" stroke="#38bdf8" stroke-width="1.5"/>
-        <line x1="10" y1="1" x2="10" y2="0" stroke="#38bdf8" stroke-width="1.5"/>
-        <line x1="20" y1="1" x2="20" y2="0" stroke="#38bdf8" stroke-width="1.5"/>
-      </svg>
-    </div>
-    <div>
-      <div class="logo-text">Neuro<span>Lab</span></div>
-      <div class="logo-sub">Signal Analysis Suite v2.0</div>
+  <!-- Help modal -->
+  <div class="modal-overlay" id="helpModal" onclick="if(event.target===this)closeHelp()">
+    <div class="modal">
+      <span class="modal-close" onclick="closeHelp()">✕</span>
+      <h2>⚡ NeuroLab Pro — Keyboard Shortcuts</h2>
+      <div class="shortcut-grid">
+        <span>Ctrl+O</span><span>Open / load CSV file</span>
+        <span>R</span><span>Re-run pipeline</span>
+        <span>E</span><span>Export filtered data (CSV)</span>
+        <span>W</span><span>Export as WAV</span>
+        <span>1</span><span>Switch to Stacked view</span>
+        <span>2</span><span>Switch to Overlay view</span>
+        <span>3</span><span>Switch to Spectrum view</span>
+        <span>4</span><span>Switch to Spectrogram view</span>
+        <span>Space</span><span>Reset zoom / pan</span>
+        <span>A</span><span>Add notch filter</span>
+        <span>M</span><span>Toggle annotation mode</span>
+        <span>?</span><span>Show this help</span>
+        <span>Escape</span><span>Close modal / cancel mode</span>
+      </div>
+      <br>
+      <div style="font-family:var(--mono);font-size:.62rem;color:var(--muted);line-height:1.9">
+        <b style="color:var(--text)">Chart interaction:</b><br>
+        • Scroll wheel → zoom in/out<br>
+        • Right-click stage badge → hide/show stage<br>
+        • Click stage badge → pin/expand chart<br>
+        • Click chart (annotation mode) → drop a named marker<br>
+        <br>
+        <b style="color:var(--text)">Analysis tab:</b><br>
+        • Band power — select signal source + click Compute<br>
+        • R-peak detection — works best on ECG, click Detect<br>
+        • RMS envelope overlay — enable in Analysis tab
+      </div>
     </div>
   </div>
 
-  <div class="divider-v"></div>
-
-  <div id="topDrop" class="top-drop" title="Drag & drop CSV or click to load">
-    <span class="icon">📂</span>
-    <span id="topDropLabel">Drop CSV / click to load</span>
+  <!-- Export menu -->
+  <div class="export-menu" id="exportMenu">
+    <div class="em-item" onclick="exportCSV()">📄 Filtered CSV</div>
+    <div class="em-item" onclick="exportWAV()">🔊 Filtered WAV</div>
+    <div class="em-item" onclick="exportSpectrumCSV()">📊 Spectrum CSV</div>
+    <div class="em-item" onclick="exportBandPower()">🧠 Band Power JSON</div>
   </div>
 
-  <div class="divider-v"></div>
-
-  <div class="top-stats" id="topStats" style="display:none">
-    <!-- Fs: editable — user can correct if auto-detect is wrong -->
-    <div class="stat-chip" title="Sample rate — auto-detected from timestamps. Click to override.">
-      <span class="lbl">Fs</span>&nbsp;
-      <input id="statFs" type="number" value="2000" min="1" max="500000" step="1"
-        title="Override sample rate and click ↵"
-        style="background:transparent;border:none;border-bottom:1px solid var(--border2);
-               color:var(--accent);font-family:var(--mono);font-size:0.65rem;
-               width:72px;outline:none;padding:0 2px;text-align:right"
-        onchange="overrideFs(this.value)"
-        onkeydown="if(event.key==='Enter')overrideFs(this.value)">
-      <span class="lbl" id="fsUnit">Hz</span>
-      <span id="fsAutoTag" style="font-size:0.55rem;padding:1px 4px;border-radius:3px;
-            background:rgba(52,211,153,0.15);color:var(--success);border:1px solid rgba(52,211,153,0.3);
-            margin-left:2px" title="Auto-detected from timestamps">AUTO</span>
-    </div>
-    <div class="stat-chip"><span class="lbl">N</span>&nbsp;<span class="val" id="statN">—</span></div>
-    <div class="stat-chip"><span class="lbl">dur</span>&nbsp;<span class="val" id="statDur">—</span></div>
-    <div class="stat-chip"><span class="lbl">dt</span>&nbsp;<span class="val" id="statDt">—</span></div>
-    <div class="stat-chip"><span class="lbl">μ</span>&nbsp;<span class="val" id="statMean">—</span></div>
-    <div class="stat-chip"><span class="lbl">σ</span>&nbsp;<span class="val" id="statStd">—</span></div>
-    <div class="stat-chip"><span class="lbl">SNR</span>&nbsp;<span class="val" id="statSNR">—</span>&nbsp;<span class="lbl">dB</span></div>
-    <div class="status-dot" id="statusDot"></div>
-  </div>
-
-  <div class="top-right">
-    <div id="processingIndicator" style="display:none"><div class="spinner"></div></div>
-    <button class="btn btn-ghost" id="btnApply" disabled onclick="applyPipeline()">▶ Run Pipeline</button>
-    <button class="btn btn-primary" id="btnExport" disabled onclick="exportData()">↓ Export</button>
-    <button class="btn btn-ghost" onclick="showHelp()">? Help</button>
-  </div>
-</div>
-
-<!-- ── WORKSPACE ── -->
-<div class="workspace">
-
-  <!-- LEFT SIDEBAR: FILTERS -->
-  <aside class="sidebar">
-    <div class="sidebar-tabs">
-      <div class="stab active" onclick="switchSTab(this,'filters')">Filters</div>
-      <div class="stab" onclick="switchSTab(this,'pipeline')">Pipeline</div>
-      <div class="stab" onclick="switchSTab(this,'metrics')">Metrics</div>
-    </div>
-
-    <!-- FILTERS TAB -->
-    <div class="sidebar-body" id="tabFilters">
-
-      <div class="sb-section">
-        <div class="sb-label">Moving Average</div>
-        <div class="fcard" id="fcMA">
-          <div class="fcard-header" onclick="toggleCard('fcMA')">
-            <span class="fcard-dot" style="background:var(--c1)"></span>
-            <span class="fcard-name">Moving Average</span>
-            <label class="toggle" onclick="e=>e.stopPropagation()">
-              <input type="checkbox" id="enMA" checked onchange="applyPipeline()">
-              <span class="tslider"></span>
-            </label>
-          </div>
-          <div class="fcard-body">
-            <div class="prow">
-              <span class="plbl">Window</span>
-              <input type="range" id="maW" min="1" max="100" value="10" oninput="syncV('maW','maWv');applyPipeline()">
-              <input type="number" id="maWv" value="10" min="1" max="100" style="width:50px" oninput="syncR('maWv','maW');applyPipeline()">
-            </div>
-          </div>
-        </div>
+  <!-- ── TOPBAR ── -->
+  <div class="topbar">
+    <div class="logo">
+      <div class="logo-mark">
+        <svg viewBox="0 0 30 30" fill="none">
+          <rect x="1" y="1" width="28" height="28" rx="4" stroke="#38bdf8" stroke-width="1.5" />
+          <rect x="6" y="6" width="8" height="8" rx="2" fill="#38bdf8" opacity=".8" />
+          <rect x="16" y="6" width="8" height="8" rx="2" fill="#a78bfa" opacity=".6" />
+          <rect x="6" y="16" width="8" height="8" rx="2" fill="#34d399" opacity=".6" />
+          <rect x="16" y="16" width="8" height="8" rx="2" fill="#f97316" opacity=".6" />
+          <line x1="1" y1="10" x2="0" y2="10" stroke="#38bdf8" stroke-width="1.5" />
+          <line x1="1" y1="20" x2="0" y2="20" stroke="#38bdf8" stroke-width="1.5" />
+          <line x1="29" y1="10" x2="30" y2="10" stroke="#38bdf8" stroke-width="1.5" />
+          <line x1="29" y1="20" x2="30" y2="20" stroke="#38bdf8" stroke-width="1.5" />
+        </svg>
       </div>
-
-      <div class="sb-section">
-        <div class="sb-label">Low-Pass Filter</div>
-        <div class="fcard" id="fcLP">
-          <div class="fcard-header" onclick="toggleCard('fcLP')">
-            <span class="fcard-dot" style="background:var(--c2)"></span>
-            <span class="fcard-name">Low-Pass (Butterworth)</span>
-            <label class="toggle">
-              <input type="checkbox" id="enLP" onchange="applyPipeline()">
-              <span class="tslider"></span>
-            </label>
-          </div>
-          <div class="fcard-body">
-            <div class="prow">
-              <span class="plbl">Cutoff Hz</span>
-              <input type="range" id="lpF" min="1" max="500" value="100" oninput="syncV('lpF','lpFv');applyPipeline()">
-              <input type="number" id="lpFv" value="100" min="1" max="500" oninput="syncR('lpFv','lpF');applyPipeline()">
-            </div>
-            <div class="prow">
-              <span class="plbl">Order</span>
-              <input type="range" id="lpOrd" min="1" max="8" value="2" step="1" oninput="syncV('lpOrd','lpOrdv');applyPipeline()">
-              <input type="number" id="lpOrdv" value="2" min="1" max="8" style="width:50px" oninput="syncR('lpOrdv','lpOrd');applyPipeline()">
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="sb-section">
-        <div class="sb-label">High-Pass Filter</div>
-        <div class="fcard" id="fcHP">
-          <div class="fcard-header" onclick="toggleCard('fcHP')">
-            <span class="fcard-dot" style="background:var(--c3)"></span>
-            <span class="fcard-name">High-Pass (Butterworth)</span>
-            <label class="toggle">
-              <input type="checkbox" id="enHP" onchange="applyPipeline()">
-              <span class="tslider"></span>
-            </label>
-          </div>
-          <div class="fcard-body">
-            <div class="prow">
-              <span class="plbl">Cutoff Hz</span>
-              <input type="range" id="hpF" min="0.1" max="500" step="0.1" value="1" oninput="syncV('hpF','hpFv');applyPipeline()">
-              <input type="number" id="hpFv" value="1" min="0.1" max="500" step="0.1" oninput="syncR('hpFv','hpF');applyPipeline()">
-            </div>
-            <div class="prow">
-              <span class="plbl">Order</span>
-              <input type="range" id="hpOrd" min="1" max="8" value="2" step="1" oninput="syncV('hpOrd','hpOrdv');applyPipeline()">
-              <input type="number" id="hpOrdv" value="2" min="1" max="8" style="width:50px" oninput="syncR('hpOrdv','hpOrd');applyPipeline()">
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="sb-section">
-        <div class="sb-label">Notch Filters <span class="notch-count" id="notchCount">0</span></div>
-        <div id="notchContainer"></div>
-        <button class="add-notch-btn" onclick="addNotch()">＋ Add Notch Filter</button>
-      </div>
-
-      <div class="sb-section">
-        <div class="sb-label">Baseline Correction</div>
-        <div class="fcard" id="fcBL">
-          <div class="fcard-header" onclick="toggleCard('fcBL')">
-            <span class="fcard-dot" style="background:#64748b"></span>
-            <span class="fcard-name">Baseline / Detrend</span>
-            <label class="toggle">
-              <input type="checkbox" id="enBL" onchange="applyPipeline()">
-              <span class="tslider"></span>
-            </label>
-          </div>
-          <div class="fcard-body">
-            <div class="prow">
-              <span class="plbl">Mode</span>
-              <select id="blMode" onchange="applyPipeline()" style="flex:1">
-                <option value="mean">Subtract Mean</option>
-                <option value="linear">Linear Detrend</option>
-                <option value="median">Subtract Median</option>
-              </select>
-            </div>
-          </div>
-        </div>
-      </div>
-
-    </div>
-
-    <!-- PIPELINE TAB -->
-    <div class="sidebar-body" id="tabPipeline" style="display:none">
-      <div class="sb-section">
-        <div class="sb-label">Processing Order</div>
-        <div class="pipeline-order" id="pipelineOrder">
-          <div class="po-item active" data-stage="MA"><span class="fcard-dot" style="background:var(--c1)"></span>1. Moving Average</div>
-          <div class="po-item active" data-stage="HP"><span class="fcard-dot" style="background:var(--c3)"></span>2. High-Pass</div>
-          <div class="po-item active" data-stage="LP"><span class="fcard-dot" style="background:var(--c2)"></span>3. Low-Pass</div>
-          <div class="po-item active" data-stage="NOTCH"><span class="fcard-dot" style="background:var(--c4)"></span>4. Notch(es)</div>
-          <div class="po-item active" data-stage="BL"><span class="fcard-dot" style="background:#64748b"></span>5. Baseline</div>
-        </div>
-      </div>
-      <div class="sb-section">
-        <div class="sb-label">Pipeline Visualization</div>
-        <div class="pipeline-viz" id="pipelineViz"></div>
-      </div>
-      <div class="sb-section">
-        <div class="sb-label">Processing Log</div>
-        <div class="proc-log" id="procLog" style="height:200px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;"></div>
+      <div>
+        <div class="logo-text">Neuro<span>Lab</span></div>
+        <div class="logo-sub">Biosignal Suite v3.0</div>
       </div>
     </div>
 
-    <!-- METRICS TAB -->
-    <div class="sidebar-body" id="tabMetrics" style="display:none">
-      <div class="sb-section">
-        <div class="sb-label">Signal Metrics — Raw</div>
-        <div class="metrics-grid" id="metricsRaw"></div>
-      </div>
-      <div class="sb-section">
-        <div class="sb-label">Signal Metrics — Final</div>
-        <div class="metrics-grid" id="metricsFinal"></div>
-      </div>
-      <div class="sb-section">
-        <div class="sb-label">SNR Improvement</div>
-        <div id="snrMeter" style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:10px">
-          <div style="font-family:var(--mono);font-size:0.65rem;color:var(--muted)">No data</div>
-        </div>
-      </div>
-      <div class="sb-section">
-        <div class="sb-label">Frequency Content</div>
-        <div id="freqContent" style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:10px">
-          <div style="font-family:var(--mono);font-size:0.65rem;color:var(--muted)">No data</div>
-        </div>
-      </div>
-    </div>
-  </aside>
+    <div class="divider-v"></div>
 
-  <!-- CENTER: CHARTS -->
-  <div class="chart-area">
-
-    <!-- Stage selector toolbar -->
-    <div class="stage-toolbar" id="stageToolbar">
-      <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);flex-shrink:0">STAGES:</span>
-      <!-- populated by JS -->
-      <div class="stb-spacer"></div>
-      <div style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);flex-shrink:0;margin-right:4px">VIEW:</div>
-      <div class="view-btns">
-        <div class="vbtn active" onclick="setLayout('stacked',this)">Stacked</div>
-        <div class="vbtn" onclick="setLayout('overlay',this)">Overlay</div>
-        <div class="vbtn" onclick="setLayout('spectrum',this)">Spectrum</div>
-      </div>
-      <div class="divider-v"></div>
-      <label style="display:flex;align-items:center;gap:4px;font-family:var(--mono);font-size:0.62rem;color:var(--muted);cursor:pointer">
-        <input type="checkbox" id="syncZoom" checked style="accent-color:var(--accent)">
-        Sync zoom
-      </label>
+    <div id="topDrop" class="top-drop" title="Drag & drop CSV or click to load">
+      <span>📂</span>
+      <span id="topDropLabel">Drop CSV / click to load</span>
     </div>
 
-    <!-- Actual charts -->
-    <div class="charts-wrap" id="chartsWrap">
-      <div class="empty-overlay" id="emptyState">
-        <div class="empty-icon">⚡</div>
-        <div class="empty-text">
-          Drop your <strong style="color:var(--accent)">CSV</strong> anywhere on this window<br>
-          or click the load button above<br>
-          <span style="font-size:0.7rem;color:var(--border2)">Accepts: timestamp_us,value &nbsp;|&nbsp; single ADC column</span>
-        </div>
-        <div style="display:flex;gap:8px">
-          <span class="kbd">Ctrl+O</span><span style="color:var(--muted);font-size:0.7rem">open</span>
-          <span class="kbd">R</span><span style="color:var(--muted);font-size:0.7rem">run pipeline</span>
-          <span class="kbd">E</span><span style="color:var(--muted);font-size:0.7rem">export</span>
-        </div>
+    <div class="divider-v"></div>
+
+    <div class="top-stats" id="topStats" style="display:none">
+      <div class="stat-chip" title="Sample rate — auto-detected. Click to override.">
+        <span class="lbl">Fs</span>&nbsp;
+        <input id="statFs" type="number" value="2000" min="1" max="500000" step="1"
+          style="background:transparent;border:none;border-bottom:1px solid var(--border2);color:var(--accent);font-family:var(--mono);font-size:.63rem;width:70px;outline:none;padding:0 2px;text-align:right"
+          onchange="overrideFs(this.value)" onkeydown="if(event.key==='Enter')overrideFs(this.value)" />
+        <span class="lbl" id="fsUnit">Hz</span>
+        <span id="fsAutoTag"
+          style="font-size:.53rem;padding:1px 4px;border-radius:3px;background:rgba(52,211,153,.15);color:var(--success);border:1px solid rgba(52,211,153,.3);margin-left:2px">AUTO</span>
       </div>
+      <div class="stat-chip"><span class="lbl">N</span>&nbsp;<span class="val" id="statN">—</span></div>
+      <div class="stat-chip"><span class="lbl">dur</span>&nbsp;<span class="val" id="statDur">—</span></div>
+      <div class="stat-chip"><span class="lbl">μ</span>&nbsp;<span class="val" id="statMean">—</span></div>
+      <div class="stat-chip"><span class="lbl">σ</span>&nbsp;<span class="val" id="statStd">—</span></div>
+      <div class="stat-chip"><span class="lbl">SNR</span>&nbsp;<span class="val" id="statSNR">—</span>&nbsp;<span
+          class="lbl">dB</span></div>
+      <div class="status-dot" id="statusDot"></div>
     </div>
 
-    <!-- Zoom controls -->
-    <div class="zp-controls" id="zoomBar" style="display:none">
-      <span class="plbl">View&nbsp;</span>
-      <input type="range" id="zoomRange" class="zp-slider" min="10" max="100" value="100" oninput="updateZoom()">
-      <span style="font-family:var(--mono);font-size:0.62rem;color:var(--accent)" id="zoomLabel">100%</span>
-      <span class="plbl" style="margin-left:8px">Offset&nbsp;</span>
-      <input type="range" id="panRange" class="zp-slider" min="0" max="100" value="0" oninput="updateZoom()">
-      <span style="font-family:var(--mono);font-size:0.62rem;color:var(--muted)" id="panLabel">0%</span>
-      <button class="btn btn-ghost" style="margin-left:auto;padding:3px 8px" onclick="resetZoom()">Reset</button>
+    <div class="top-right">
+      <div id="processingIndicator" style="display:none">
+        <div class="spinner"></div>
+      </div>
+      <button class="btn btn-ghost" id="btnApply" disabled onclick="applyPipeline()">▶ Run</button>
+      <div style="position:relative">
+        <button class="btn btn-primary" id="btnExport" disabled onclick="toggleExportMenu(event)">↓ Export ▾</button>
+      </div>
+      <button class="btn btn-ghost" id="btnAnnot" onclick="toggleAnnotMode()" title="Toggle annotation mode (M)">🖊
+        Annotate</button>
+      <button class="btn btn-ghost" onclick="showHelp()">? Help</button>
     </div>
   </div>
 
-  <!-- RIGHT PANEL -->
-  <div class="right-panel">
-    <div class="rp-section">
-      <div class="rp-title">Cursor Readout</div>
-      <div class="cursor-readout" id="cursorReadout">
-        <div class="cr-row"><span class="cr-lbl">Time</span><span class="cr-val" id="crTime">—</span></div>
-        <div class="cr-row"><span class="cr-lbl">Raw ADC</span><span class="cr-val" id="crRaw">—</span></div>
-        <div class="cr-row"><span class="cr-lbl">Filtered</span><span class="cr-val" id="crFilt">—</span></div>
-        <div class="cr-row"><span class="cr-lbl">Δ</span><span class="cr-val" id="crDelta">—</span></div>
+  <!-- ── WORKSPACE ── -->
+  <div class="workspace">
+
+    <!-- LEFT SIDEBAR -->
+    <aside class="sidebar">
+      <div class="sidebar-tabs">
+        <div class="stab active" onclick="switchSTab(this,'filters')">Filters</div>
+        <div class="stab" onclick="switchSTab(this,'pipeline')">Pipeline</div>
+        <div class="stab" onclick="switchSTab(this,'metrics')">Metrics</div>
+        <div class="stab" onclick="switchSTab(this,'analysis')">Analysis</div>
       </div>
-    </div>
 
-    <div class="rp-section">
-      <div class="rp-title">Overlay Stages</div>
-      <div class="overlay-toggle" id="overlayToggle"></div>
-    </div>
-
-    <div class="freq-panel">
-      <div class="rp-title">Frequency Spectrum</div>
-      <div style="flex:1;min-height:120px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;overflow:hidden">
-        <canvas id="specCanvas" style="width:100%;height:100%"></canvas>
-      </div>
-      <div style="font-family:var(--mono);font-size:0.58rem;color:var(--muted)">Dominant: <span id="domFreq" style="color:var(--accent)">—</span></div>
-    </div>
-  </div>
-
-</div>
-
-<script>
-// ╔══════════════════════════════════════════════════════════════╗
-// ║              NEUROLAB PRO — SIGNAL ENGINE                   ║
-// ╚══════════════════════════════════════════════════════════════╝
-
-// ─── STATE ───────────────────────────────────────────────────
-const STATE = {
-  raw: null,
-  timestamps: null,
-  fs: 2000,
-  stages: {},      // name -> Float64Array
-  stageOrder: [],  // computed stage names in pipeline order
-  charts: {},
-  notches: [],
-  notchId: 0,
-  layout: 'stacked',
-  pinnedStages: new Set(['raw','final']),
-  hiddenStages: new Set(),
-  zoom: 100,
-  pan: 0,
-  overlayActive: new Set(),
-};
-
-// ─── STAGE DEFINITIONS ───────────────────────────────────────
-const STAGE_META = {
-  raw:    { label:'RAW ADC',      color:'#38bdf8', short:'RAW' },
-  ma:     { label:'After MA',     color:'#facc15', short:'MA'  },
-  hp:     { label:'After HP',     color:'#a78bfa', short:'HP'  },
-  lp:     { label:'After LP',     color:'#f97316', short:'LP'  },
-  bl:     { label:'Detrended',    color:'#94a3b8', short:'BL'  },
-  final:  { label:'FINAL OUTPUT', color:'#34d399', short:'OUT' },
-};
-
-function getNotchMeta(id) {
-  const colors = ['#fb7185','#60a5fa','#fbbf24','#c084fc','#4ade80','#f87171'];
-  const i = STATE.notches.findIndex(n => n.id === id);
-  return { label:`After Notch ${i+1}`, color: colors[i % colors.length], short:`N${i+1}` };
-}
-
-// ─── FS UI HELPERS ────────────────────────────────────────────
-function updateFsUI() {
-  const fs = STATE.fs;
-  const input = document.getElementById('statFs');
-  const unitEl = document.getElementById('fsUnit');
-  const tag = document.getElementById('fsAutoTag');
-
-  input.value = fs;
-
-  // Show dt tooltip
-  if (STATE.rawMedDt !== undefined) {
-    const dtStr = STATE.rawMedDt < 0.01
-      ? `${(STATE.rawMedDt * 1000).toFixed(4)} ms`
-      : STATE.rawMedDt < 10
-        ? `${STATE.rawMedDt.toFixed(4)} ms`
-        : `${STATE.rawMedDt.toFixed(1)} μs`;
-    document.getElementById('statDt').textContent = dtStr;
-    input.title = `Auto-detected: dt=${STATE.rawMedDt.toExponential(4)} ${STATE.rawMedDtUnit} → ${fs} Hz. Edit to override.`;
-  }
-
-  // Tag style: green if auto, orange if manual
-  if (STATE.fsManual) {
-    tag.textContent = 'MANUAL';
-    tag.style.background = 'rgba(250,204,21,0.15)';
-    tag.style.color = 'var(--warn)';
-    tag.style.borderColor = 'rgba(250,204,21,0.3)';
-  } else {
-    tag.textContent = 'AUTO';
-    tag.style.background = 'rgba(52,211,153,0.15)';
-    tag.style.color = 'var(--success)';
-    tag.style.borderColor = 'rgba(52,211,153,0.3)';
-  }
-
-  // Update sliders
-  const nyq = fs / 2;
-  document.getElementById('lpF').max   = nyq;
-  document.getElementById('lpFv').max  = nyq;
-  document.getElementById('hpF').max   = nyq;
-  document.getElementById('hpFv').max  = nyq;
-  if (parseFloat(document.getElementById('lpFv').value) > nyq) {
-    document.getElementById('lpF').value  = Math.round(nyq * 0.4);
-    document.getElementById('lpFv').value = Math.round(nyq * 0.4);
-  }
-
-  // Update notch sliders
-  for (const n of STATE.notches) {
-    const r = document.getElementById(`nf0r_${n.id}`);
-    if (r) { r.max = nyq; }
-    const v = document.getElementById(`nf0v_${n.id}`);
-    if (v) { v.max = nyq; }
-  }
-
-  // Duration
-  if (STATE.raw) {
-    const dur = STATE.raw.length / fs;
-    document.getElementById('statDur').textContent =
-      dur >= 60 ? `${(dur/60).toFixed(2)}min` : `${dur.toFixed(3)}s`;
-  }
-}
-
-function overrideFs(val) {
-  const fs = Math.round(parseFloat(val));
-  if (isNaN(fs) || fs < 1 || fs > 500000) return;
-  STATE.fs = fs;
-  STATE.fsManual = true;
-  updateFsUI();
-  log(`Fs manually set to ${fs} Hz`, 'warn');
-  if (STATE.raw) applyPipeline();
-}
-
-// ─── LOGGING ─────────────────────────────────────────────────
-function log(msg, type='info') {
-  const el = document.getElementById('procLog');
-  if (!el) return;
-  const now = new Date();
-  const ts = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}:${now.getSeconds().toString().padStart(2,'0')}`;
-  const div = document.createElement('div');
-  div.className = 'log-line';
-  div.innerHTML = `<span class="log-time">${ts}</span><span class="log-${type}">${msg}</span>`;
-  el.appendChild(div);
-  el.scrollTop = el.scrollHeight;
-}
-
-// ─── DSP UTILITIES ───────────────────────────────────────────
-// Fast FFT (Cooley-Tukey, power-of-2)
-function fft(re, im) {
-  const n = re.length;
-  if (n <= 1) return;
-  // bit-reverse
-  for (let i=1,j=0; i<n; i++) {
-    let bit = n>>1;
-    for (; j&bit; bit>>=1) j^=bit;
-    j^=bit;
-    if (i<j) { [re[i],re[j]]=[re[j],re[i]]; [im[i],im[j]]=[im[j],im[i]]; }
-  }
-  for (let len=2; len<=n; len<<=1) {
-    const ang = -2*Math.PI/len;
-    const wRe = Math.cos(ang), wIm = Math.sin(ang);
-    for (let i=0; i<n; i+=len) {
-      let curRe=1, curIm=0;
-      for (let j=0; j<len/2; j++) {
-        const uR=re[i+j], uI=im[i+j];
-        const vR=re[i+j+len/2]*curRe - im[i+j+len/2]*curIm;
-        const vI=re[i+j+len/2]*curIm + im[i+j+len/2]*curRe;
-        re[i+j]=uR+vR; im[i+j]=uI+vI;
-        re[i+j+len/2]=uR-vR; im[i+j+len/2]=uI-vI;
-        const nr=curRe*wRe-curIm*wIm;
-        curIm=curRe*wIm+curIm*wRe; curRe=nr;
-      }
-    }
-  }
-}
-
-function computeSpectrum(signal, fs) {
-  let n = 1;
-  while (n < signal.length) n <<= 1;
-  n = Math.min(n, 32768); // cap
-  const re = new Float64Array(n);
-  const im = new Float64Array(n);
-  for (let i=0; i<n; i++) re[i] = i < signal.length ? signal[i] : 0;
-  fft(re, im);
-  const mag = new Float64Array(n/2);
-  for (let i=0; i<n/2; i++) mag[i] = Math.sqrt(re[i]*re[i]+im[i]*im[i]) / n;
-  const freqs = new Float64Array(n/2);
-  for (let i=0; i<n/2; i++) freqs[i] = i * fs / n;
-  return { mag, freqs };
-}
-
-// Butterworth IIR — nth order via biquad cascade
-function butterworthLP(fc, fs, order) {
-  // Return array of {b0,b1,b2,a1,a2} biquad sections
-  const sections = [];
-  const numSections = Math.ceil(order/2);
-  const wc = Math.tan(Math.PI * fc / fs);
-  for (let k=1; k<=numSections; k++) {
-    let Q;
-    if (order % 2 === 1 && k === numSections) {
-      // first-order section
-      const b0 = wc/(1+wc), b1 = b0, a1 = -(1-wc)/(1+wc);
-      sections.push({b0,b1,b2:0,a1,a2:0,order1:true});
-    } else {
-      const theta = Math.PI*(2*k-1)/(2*order);
-      Q = 1/(2*Math.cos(theta));
-      const denom = 1 + wc/Q + wc*wc;
-      const b0 = wc*wc/denom;
-      const b1 = 2*b0;
-      const b2 = b0;
-      const a1 = 2*(wc*wc-1)/denom;
-      const a2 = (1 - wc/Q + wc*wc)/denom;
-      sections.push({b0,b1,b2,a1,a2,order1:false});
-    }
-  }
-  return sections;
-}
-
-function butterworthHP(fc, fs, order) {
-  const sections = [];
-  const numSections = Math.ceil(order/2);
-  const wc = Math.tan(Math.PI * fc / fs);
-  for (let k=1; k<=numSections; k++) {
-    if (order % 2 === 1 && k === numSections) {
-      const b0 = 1/(1+wc), b1 = -b0, a1 = (wc-1)/(wc+1);
-      sections.push({b0,b1,b2:0,a1,a2:0,order1:true});
-    } else {
-      const theta = Math.PI*(2*k-1)/(2*order);
-      const Q = 1/(2*Math.cos(theta));
-      const denom = 1 + wc/Q + wc*wc;
-      const b0 = 1/denom;
-      const b1 = -2/denom;
-      const b2 = b0;
-      const a1 = 2*(wc*wc-1)/denom;
-      const a2 = (1 - wc/Q + wc*wc)/denom;
-      sections.push({b0,b1,b2,a1,a2,order1:false});
-    }
-  }
-  return sections;
-}
-
-function applyBiquadCascade(data, sections) {
-  let out = new Float64Array(data);
-  for (const s of sections) {
-    const buf = new Float64Array(out.length);
-    let x1=0,x2=0,y1=0,y2=0;
-    if (s.order1) {
-      for (let i=0; i<out.length; i++) {
-        const x0 = out[i];
-        const y0 = s.b0*x0 + s.b1*x1 - s.a1*y1;
-        buf[i]=y0; x1=x0; y1=y0;
-      }
-    } else {
-      for (let i=0; i<out.length; i++) {
-        const x0 = out[i];
-        const y0 = s.b0*x0 + s.b1*x1 + s.b2*x2 - s.a1*y1 - s.a2*y2;
-        buf[i]=y0; x2=x1; x1=x0; y2=y1; y1=y0;
-      }
-    }
-    out = buf;
-  }
-  return out;
-}
-
-// Notch filter (biquad IIR)
-class NotchFilter {
-  constructor(f0, fs, Q) {
-    const w0 = 2*Math.PI*f0/fs;
-    const alpha = Math.sin(w0)/(2*Q);
-    const a0 = 1+alpha;
-    this.b0 = 1/a0;
-    this.b1 = -2*Math.cos(w0)/a0;
-    this.b2 = 1/a0;
-    this.a1 = -2*Math.cos(w0)/a0;
-    this.a2 = (1-alpha)/a0;
-    this.x1=this.x2=this.y1=this.y2=0;
-  }
-  process(x0) {
-    const y0 = this.b0*x0 + this.b1*this.x1 + this.b2*this.x2 - this.a1*this.y1 - this.a2*this.y2;
-    this.x2=this.x1; this.x1=x0; this.y2=this.y1; this.y1=y0;
-    return y0;
-  }
-  static apply(data, f0, fs, Q, passes=1) {
-    let arr = new Float64Array(data);
-    for (let p=0; p<passes; p++) {
-      const f = new NotchFilter(f0, fs, Q);
-      for (let i=0; i<arr.length; i++) arr[i] = f.process(arr[i]);
-    }
-    return arr;
-  }
-}
-
-function movingAverage(data, w) {
-  if (w <= 1) return new Float64Array(data);
-  const out = new Float64Array(data.length);
-  let sum=0;
-  for (let i=0; i<data.length; i++) {
-    sum += data[i];
-    if (i >= w) sum -= data[i-w];
-    out[i] = sum / Math.min(i+1, w);
-  }
-  return out;
-}
-
-function detrend(data, mode) {
-  const out = new Float64Array(data);
-  if (mode === 'mean') {
-    const m = out.reduce((a,b)=>a+b,0)/out.length;
-    for (let i=0; i<out.length; i++) out[i] -= m;
-  } else if (mode === 'linear') {
-    const n = out.length;
-    const xm = (n-1)/2;
-    let ym=0, ssxx=0, ssxy=0;
-    for (let i=0; i<n; i++) ym += out[i]/n;
-    for (let i=0; i<n; i++) { ssxx += (i-xm)**2; ssxy += (i-xm)*(out[i]-ym); }
-    const slope = ssxy/ssxx;
-    const intercept = ym - slope*xm;
-    for (let i=0; i<n; i++) out[i] -= slope*i + intercept;
-  } else if (mode === 'median') {
-    const sorted = [...out].sort((a,b)=>a-b);
-    const med = sorted[Math.floor(sorted.length/2)];
-    for (let i=0; i<out.length; i++) out[i] -= med;
-  }
-  return out;
-}
-
-function calcStats(arr) {
-  const n = arr.length;
-  let min=Infinity,max=-Infinity,sum=0,sum2=0;
-  for (const v of arr) {
-    if (v<min) min=v;
-    if (v>max) max=v;
-    sum += v; sum2 += v*v;
-  }
-  const mean = sum/n;
-  const std = Math.sqrt(sum2/n - mean*mean);
-  const rms = Math.sqrt(sum2/n);
-  return { min, max, mean, std, rms, n };
-}
-
-function calcSNR(rawArr, filtArr) {
-  const noise = new Float64Array(rawArr.length);
-  for (let i=0; i<rawArr.length; i++) noise[i] = rawArr[i] - filtArr[i];
-  const sRMS = calcStats(filtArr).rms;
-  const nRMS = calcStats(noise).rms;
-  if (nRMS < 1e-10) return 99;
-  return 20 * Math.log10(sRMS / nRMS);
-}
-
-// ─── FILE LOADING ─────────────────────────────────────────────
-const topDrop = document.getElementById('topDrop');
-const fileInput = document.getElementById('fileInput');
-
-document.addEventListener('dragover', e => { e.preventDefault(); topDrop.classList.add('drag'); });
-document.addEventListener('dragleave', e => { if (e.target === document.body || e.relatedTarget == null) topDrop.classList.remove('drag'); });
-document.addEventListener('drop', e => { e.preventDefault(); topDrop.classList.remove('drag'); if (e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]); });
-
-topDrop.addEventListener('click', () => fileInput.click());
-fileInput.addEventListener('change', () => { if (fileInput.files[0]) loadFile(fileInput.files[0]); });
-
-function loadFile(file) {
-  document.getElementById('topDropLabel').innerHTML = `<div class="spinner" style="width:12px;height:12px"></div>&nbsp;Loading…`;
-  const reader = new FileReader();
-  reader.onload = e => {
-    try { parseCSV(e.target.result, file.name); }
-    catch(ex) { log('Parse error: '+ex.message,'warn'); }
-    document.getElementById('topDropLabel').textContent = '📄 ' + file.name;
-  };
-  reader.readAsText(file);
-}
-
-function parseCSV(text, fname) {
-  const allLines = text.trim().split('\n').filter(l => l.trim() && !l.startsWith('#'));
-  if (allLines.length === 0) { log('No rows found', 'warn'); return; }
-
-  // ── Detect header row ──────────────────────────────────────
-  // A header row has at least one non-numeric cell in the first row
-  const firstParts = allLines[0].split(/[\s,;\t]+/).map(s => s.trim()).filter(Boolean);
-  const hasHeader = firstParts.some(p => isNaN(p) || p === '');
-  const dataLines = hasHeader ? allLines.slice(1) : allLines;
-
-  // ── Detect column layout from first numeric row ────────────
-  // Find which column is timestamp and which is the signal value
-  // We look for: timestamp col (monotonically increasing) and value col
-  let tsCol = -1, valCol = -1;
-  const headerCols = hasHeader
-    ? firstParts.map(p => p.toLowerCase())
-    : null;
-
-  if (headerCols) {
-    // Try to find by column name
-    tsCol  = headerCols.findIndex(h => h.includes('time') || h.includes('ts') || h.includes('stamp'));
-    valCol = headerCols.findIndex(h => h.includes('emg') || h.includes('eog') || h.includes('val') || h.includes('adc') || h.includes('signal') || h.includes('ch'));
-    if (tsCol === -1) tsCol = 0;
-    if (valCol === -1) valCol = tsCol === 0 ? 1 : 0;
-    log(`Header detected: columns [${headerCols.join(', ')}]`, 'info');
-    log(`Using col ${tsCol} as timestamp, col ${valCol} as signal`, 'info');
-  } else {
-    tsCol = 0; valCol = 1;
-  }
-
-  const values = [], timestamps = [];
-
-  for (const line of dataLines) {
-    const parts = line.split(/[\s,;\t]+/).map(s => s.trim());
-    const ts  = tsCol >= 0 && parts.length > tsCol  ? parseFloat(parts[tsCol])  : NaN;
-    const val = valCol >= 0 && parts.length > valCol ? parseFloat(parts[valCol]) : NaN;
-
-    // Skip rows where the signal value is missing/empty
-    if (isNaN(val)) continue;
-    values.push(val);
-    if (!isNaN(ts)) timestamps.push(ts);
-  }
-
-  if (values.length === 0) { log('No numeric signal data found', 'warn'); return; }
-  if (timestamps.length !== values.length) {
-    log('Timestamp/value count mismatch — timestamps dropped', 'warn');
-    timestamps.length = 0;
-  }
-
-  STATE.raw = new Float64Array(values);
-  STATE.timestamps = timestamps.length > 0 ? new Float64Array(timestamps) : null;
-
-  // ── Compute Fs from t2 - t1 ──────────────────────────────
-  // Robust approach:
-  //   1. Compute median consecutive dt (up to 5000 diffs)
-  //   2. Try ALL three unit interpretations (seconds, ms, µs)
-  //   3. For each, compute how close the resulting Fs is to a standard rate
-  //   4. Pick the interpretation that gives the BEST snap to a standard rate
-  //   5. If none snaps within 10%, just use the seconds interpretation as-is
-  //   6. Always show raw dt and allow user to manually override Fs
-  const STD_RATES = [50,100,128,200,250,256,500,512,1000,1024,1250,
-                     2000,2048,4000,4096,5000,8000,10000,12000,16000,
-                     20000,22050,44100,48000,96000,192000];
-
-  function snapDist(fs) {
-    const best = STD_RATES.reduce((a,b) => Math.abs(b-fs)<Math.abs(a-fs)?b:a);
-    return { snapped: best, relErr: Math.abs(best-fs)/fs };
-  }
-
-  STATE.fsAutoDetected = false;
-
-  if (STATE.timestamps && STATE.timestamps.length > 2) {
-    const diffs = [];
-    const maxDiffs = Math.min(STATE.timestamps.length - 1, 5000);
-    for (let i = 1; i <= maxDiffs; i++) {
-      const dt = STATE.timestamps[i] - STATE.timestamps[i - 1];
-      if (dt > 0) diffs.push(dt);
-    }
-
-    if (diffs.length > 0) {
-      diffs.sort((a, b) => a - b);
-      const medDt = diffs[Math.floor(diffs.length / 2)];
-
-      // Try seconds, milliseconds, microseconds — pick best snap
-      const candidates = [
-        { label:'s',  fsRaw: 1 / medDt          },
-        { label:'ms', fsRaw: 1 / (medDt * 1e-3) },
-        { label:'μs', fsRaw: 1 / (medDt * 1e-6) },
-      ].filter(c => c.fsRaw >= 10 && c.fsRaw <= 500000)
-       .map(c => ({ ...c, ...snapDist(c.fsRaw) }));
-
-      // Sort by relative error to nearest standard rate
-      candidates.sort((a, b) => a.relErr - b.relErr);
-
-      const best = candidates[0];
-      const usedFs = best.relErr < 0.10 ? best.snapped : Math.round(best.fsRaw);
-
-      STATE.fs = Math.max(10, Math.min(500000, usedFs));
-      STATE.fsAutoDetected = true;
-      STATE.rawMedDt = medDt;
-      STATE.rawMedDtUnit = best.label;
-
-      log(`median dt = ${medDt.toExponential(4)} → interpreted as ${best.label}` +
-          ` → raw Fs = ${Math.round(best.fsRaw)} Hz → snapped to ${STATE.fs} Hz` +
-          ` (err ${(best.relErr*100).toFixed(2)}%)`, 'ok');
-
-      if (best.relErr > 0.10) {
-        log(`⚠ Fs not near any standard rate. Check timestamps or override manually.`, 'warn');
-      }
-    } else {
-      log('All diffs ≤ 0. Using default Fs = 2000 Hz', 'warn');
-    }
-  } else {
-    log('No timestamps — using default Fs = 2000 Hz', 'warn');
-  }
-
-  // ── Update all UI that depends on Fs ─────────────────────
-  updateFsUI();
-
-  const st = calcStats(STATE.raw);
-  document.getElementById('statN').textContent    = values.length.toLocaleString();
-  document.getElementById('statMean').textContent = st.mean.toFixed(1);
-  document.getElementById('statStd').textContent  = st.std.toFixed(1);
-  document.getElementById('topStats').style.display = 'flex';
-
-  log(`Loaded ${values.length} samples, Fs=${STATE.fs} Hz, dur=${(values.length/STATE.fs).toFixed(3)}s`, 'ok');
-
-  document.getElementById('emptyState').style.display = 'none';
-  document.getElementById('btnApply').disabled = false;
-  document.getElementById('btnExport').disabled = false;
-  document.getElementById('zoomBar').style.display = 'flex';
-
-  const dot = document.getElementById('statusDot');
-  dot.className = 'status-dot live';
-
-  applyPipeline();
-}
-
-// ─── FILTER PIPELINE ──────────────────────────────────────────
-let pipelineTimer = null;
-
-function applyPipeline() {
-  if (!STATE.raw) return;
-  clearTimeout(pipelineTimer);
-  pipelineTimer = setTimeout(_runPipeline, 80);
-}
-
-function _runPipeline() {
-  if (!STATE.raw) return;
-  const t0 = performance.now();
-  document.getElementById('processingIndicator').style.display = 'flex';
-
-  const stages = {};
-  const order = [];
-
-  stages['raw'] = STATE.raw;
-  order.push('raw');
-
-  let current = new Float64Array(STATE.raw);
-
-  // 1. Moving Average
-  if (document.getElementById('enMA').checked) {
-    const w = parseInt(document.getElementById('maWv').value) || 1;
-    current = movingAverage(current, w);
-    stages['ma'] = new Float64Array(current);
-    order.push('ma');
-    log(`MA: window=${w}`, 'info');
-  }
-
-  // 2. High-Pass
-  if (document.getElementById('enHP').checked) {
-    const fc = parseFloat(document.getElementById('hpFv').value);
-    const ord = parseInt(document.getElementById('hpOrdv').value);
-    if (fc > 0 && fc < STATE.fs/2) {
-      const secs = butterworthHP(fc, STATE.fs, ord);
-      current = applyBiquadCascade(current, secs);
-      stages['hp'] = new Float64Array(current);
-      order.push('hp');
-      log(`HP: fc=${fc}Hz order=${ord}`, 'info');
-    }
-  }
-
-  // 3. Low-Pass
-  if (document.getElementById('enLP').checked) {
-    const fc = parseFloat(document.getElementById('lpFv').value);
-    const ord = parseInt(document.getElementById('lpOrdv').value);
-    if (fc > 0 && fc < STATE.fs/2) {
-      const secs = butterworthLP(fc, STATE.fs, ord);
-      current = applyBiquadCascade(current, secs);
-      stages['lp'] = new Float64Array(current);
-      order.push('lp');
-      log(`LP: fc=${fc}Hz order=${ord}`, 'info');
-    }
-  }
-
-  // 4. Notches
-  for (const n of STATE.notches) {
-    if (!n.enabled) continue;
-    const f0 = n.f0, Q = n.Q, passes = n.passes;
-    if (f0 > 0 && f0 < STATE.fs/2) {
-      current = NotchFilter.apply(current, f0, STATE.fs, Q, passes);
-      const key = `notch_${n.id}`;
-      stages[key] = new Float64Array(current);
-      order.push(key);
-      log(`Notch: f0=${f0}Hz Q=${Q} passes=${passes}`, 'info');
-    }
-  }
-
-  // 5. Baseline
-  if (document.getElementById('enBL').checked) {
-    const mode = document.getElementById('blMode').value;
-    current = detrend(current, mode);
-    stages['bl'] = new Float64Array(current);
-    order.push('bl');
-    log(`Baseline: mode=${mode}`, 'info');
-  }
-
-  stages['final'] = new Float64Array(current);
-  order.push('final');
-
-  STATE.stages = stages;
-  STATE.stageOrder = order;
-
-  // SNR
-  const snr = calcSNR(STATE.raw, current);
-  const snrStr = isFinite(snr) ? snr.toFixed(1) : '∞';
-  document.getElementById('statSNR').textContent = snrStr;
-
-  const dt = (performance.now()-t0).toFixed(1);
-  log(`Pipeline done in ${dt}ms, SNR=${snrStr}dB`, 'ok');
-
-  updateStageToolbar();
-  renderCharts();
-  updateMetrics();
-  renderSpectrum();
-  updatePipelineViz();
-
-  document.getElementById('processingIndicator').style.display = 'none';
-}
-
-// ─── NOTCH MANAGEMENT ─────────────────────────────────────────
-function addNotch(f0=50, Q=5, passes=1) {
-  const id = ++STATE.notchId;
-  STATE.notches.push({ id, f0, Q, passes, enabled:true });
-
-  const container = document.getElementById('notchContainer');
-  const colors = ['#fb7185','#60a5fa','#fbbf24','#c084fc','#4ade80','#f87171'];
-  const color = colors[(STATE.notches.length-1) % colors.length];
-
-  const div = document.createElement('div');
-  div.className = 'fcard';
-  div.id = `nc_${id}`;
-  div.innerHTML = `
-    <div class="fcard-header" onclick="toggleCard('nc_${id}')">
-      <span class="fcard-dot" style="background:${color}"></span>
-      <span class="fcard-name">Notch #${STATE.notches.length}</span>
-      <span class="fcard-order" id="nf_${id}">50 Hz</span>
-      <label class="toggle" onclick="event.stopPropagation()">
-        <input type="checkbox" id="en_notch_${id}" checked onchange="updateNotch(${id})">
-        <span class="tslider"></span>
-      </label>
-      <div class="del-btn" onclick="removeNotch(${id})" title="Remove">✕</div>
-    </div>
-    <div class="fcard-body">
-      <div class="prow">
-        <span class="plbl">Freq Hz</span>
-        <input type="range" id="nf0r_${id}" min="1" max="${STATE.fs/2}" step="0.5" value="${f0}"
-          oninput="syncV('nf0r_${id}','nf0v_${id}',2);updateNotch(${id})">
-        <input type="number" id="nf0v_${id}" value="${f0}" min="1" max="${STATE.fs/2}" step="0.5"
-          oninput="syncR('nf0v_${id}','nf0r_${id}');updateNotch(${id})">
-      </div>
-      <div class="prow">
-        <span class="plbl">Q factor</span>
-        <input type="range" id="nQr_${id}" min="0.5" max="50" step="0.5" value="${Q}"
-          oninput="syncV('nQr_${id}','nQv_${id}',1);updateNotch(${id})">
-        <input type="number" id="nQv_${id}" value="${Q}" min="0.5" max="50" step="0.5"
-          oninput="syncR('nQv_${id}','nQr_${id}');updateNotch(${id})">
-      </div>
-      <div class="prow">
-        <span class="plbl">Passes</span>
-        <input type="range" id="nPr_${id}" min="1" max="6" step="1" value="${passes}"
-          oninput="syncV('nPr_${id}','nPv_${id}',0);updateNotch(${id})">
-        <input type="number" id="nPv_${id}" value="${passes}" min="1" max="6" style="width:50px"
-          oninput="syncR('nPv_${id}','nPr_${id}');updateNotch(${id})">
-      </div>
-    </div>`;
-  container.appendChild(div);
-
-  document.getElementById('notchCount').textContent = STATE.notches.length;
-  applyPipeline();
-}
-
-function removeNotch(id) {
-  const idx = STATE.notches.findIndex(n => n.id===id);
-  if (idx !== -1) STATE.notches.splice(idx,1);
-  const el = document.getElementById(`nc_${id}`);
-  if (el) el.remove();
-  document.getElementById('notchCount').textContent = STATE.notches.length;
-  applyPipeline();
-}
-
-function updateNotch(id) {
-  const n = STATE.notches.find(n=>n.id===id);
-  if (!n) return;
-  n.f0 = parseFloat(document.getElementById(`nf0v_${id}`).value) || 50;
-  n.Q  = parseFloat(document.getElementById(`nQv_${id}`).value) || 5;
-  n.passes = parseInt(document.getElementById(`nPv_${id}`).value) || 1;
-  n.enabled = document.getElementById(`en_notch_${id}`).checked;
-  const label = document.getElementById(`nf_${id}`);
-  if (label) label.textContent = n.f0 + ' Hz';
-  applyPipeline();
-}
-
-// ─── UI HELPERS ───────────────────────────────────────────────
-function syncV(rangeId, numId, dec=1) {
-  const v = parseFloat(document.getElementById(rangeId).value);
-  document.getElementById(numId).value = v.toFixed(dec);
-}
-
-function syncR(numId, rangeId) {
-  const v = parseFloat(document.getElementById(numId).value);
-  if (!isNaN(v)) document.getElementById(rangeId).value = v;
-}
-
-function toggleCard(id) {
-  document.getElementById(id).classList.toggle('collapsed');
-}
-
-function switchSTab(el, tab) {
-  document.querySelectorAll('.stab').forEach(e=>e.classList.remove('active'));
-  el.classList.add('active');
-  ['tabFilters','tabPipeline','tabMetrics'].forEach(id=>{
-    document.getElementById(id).style.display = (id === 'tab'+tab.charAt(0).toUpperCase()+tab.slice(1)) ? 'flex' : 'none';
-  });
-}
-
-// ─── STAGE TOOLBAR ───────────────────────────────────────────
-function updateStageToolbar() {
-  const tb = document.getElementById('stageToolbar');
-  // Remove old stage buttons
-  tb.querySelectorAll('.stage-btn').forEach(e=>e.remove());
-
-  const insertBefore = tb.querySelector('.stb-spacer');
-
-  for (const key of STATE.stageOrder) {
-    const meta = key.startsWith('notch_') ? getNotchMeta(parseInt(key.split('_')[1])) : STAGE_META[key];
-    if (!meta) continue;
-
-    const btn = document.createElement('button');
-    btn.className = 'stage-btn';
-    btn.dataset.stageKey = key;
-
-    if (STATE.hiddenStages.has(key)) btn.classList.add('hidden-stage');
-    else if (STATE.pinnedStages.has(key)) btn.classList.add('pinned');
-    else btn.classList.add('mini');
-
-    btn.style.borderColor = STATE.pinnedStages.has(key) ? meta.color : '';
-    btn.style.background = STATE.pinnedStages.has(key) ? meta.color+'22' : '';
-
-    btn.innerHTML = `<span class="sdot" style="background:${meta.color}"></span>${meta.short}`;
-    btn.title = meta.label + ' — click to pin/mini/hide';
-
-    btn.addEventListener('click', () => cycleStageVisibility(key));
-    tb.insertBefore(btn, insertBefore);
-  }
-
-  // Update overlay chips
-  const ot = document.getElementById('overlayToggle');
-  ot.innerHTML = '';
-  for (const key of STATE.stageOrder) {
-    const meta = key.startsWith('notch_') ? getNotchMeta(parseInt(key.split('_')[1])) : STAGE_META[key];
-    if (!meta) continue;
-    const chip = document.createElement('div');
-    chip.className = 'ov-chip' + (STATE.overlayActive.has(key) ? ' on' : '');
-    chip.style.borderColor = STATE.overlayActive.has(key) ? meta.color : '';
-    chip.style.color = STATE.overlayActive.has(key) ? meta.color : '';
-    chip.innerHTML = `<span class="sdot" style="background:${meta.color}"></span>${meta.short}`;
-    chip.addEventListener('click', () => {
-      STATE.overlayActive.has(key) ? STATE.overlayActive.delete(key) : STATE.overlayActive.add(key);
-      if (STATE.layout === 'overlay') renderCharts();
-      else updateStageToolbar();
-    });
-    ot.appendChild(chip);
-  }
-}
-
-function cycleStageVisibility(key) {
-  if (STATE.hiddenStages.has(key)) {
-    // hidden -> mini
-    STATE.hiddenStages.delete(key);
-  } else if (STATE.pinnedStages.has(key)) {
-    if (STATE.pinnedStages.size > 1) {
-      // pinned -> hidden
-      STATE.pinnedStages.delete(key);
-      STATE.hiddenStages.add(key);
-    }
-  } else {
-    // mini -> pinned
-    STATE.pinnedStages.add(key);
-  }
-  updateStageToolbar();
-  renderCharts();
-}
-
-// ─── CHART RENDERING ─────────────────────────────────────────
-function renderCharts() {
-  if (!STATE.raw) return;
-
-  if (STATE.layout === 'overlay') { renderOverlay(); return; }
-  if (STATE.layout === 'spectrum') { renderSpectrumLayout(); return; }
-  renderStacked();
-}
-
-function getDisplayData(arr) {
-  const maxPts = Math.min(arr.length, 4000);
-  const stride = Math.max(1, Math.floor(arr.length/maxPts));
-  const zoomFraction = STATE.zoom / 100;
-  const totalDisplayed = Math.floor(arr.length * zoomFraction);
-  const startFraction = STATE.pan / 100;
-  const startIdx = Math.floor(startFraction * (arr.length - totalDisplayed));
-  const endIdx = startIdx + totalDisplayed;
-
-  const out = [];
-  const strideZ = Math.max(1, Math.floor(totalDisplayed/maxPts));
-  for (let i=startIdx; i<endIdx; i+=strideZ) {
-    out.push(arr[i]);
-  }
-  return out;
-}
-
-function getTimeAxis(n, startFraction, zoomFraction) {
-  const totalSamples = STATE.raw.length;
-  const start = startFraction * totalSamples;
-  const end = start + totalSamples * zoomFraction;
-  const step = (end-start)/n;
-  const arr = [];
-  for (let i=0; i<n; i++) {
-    arr.push(((start + i*step) / STATE.fs).toFixed(4));
-  }
-  return arr;
-}
-
-function destroyChart(key) {
-  if (STATE.charts[key]) { STATE.charts[key].destroy(); delete STATE.charts[key]; }
-}
-
-function destroyAllCharts() {
-  Object.keys(STATE.charts).forEach(k => { STATE.charts[k].destroy(); });
-  STATE.charts = {};
-}
-
-const CHART_DEFAULTS = {
-  responsive: true,
-  maintainAspectRatio: false,
-  animation: { duration: 0 },
-  interaction: { mode:'index', intersect:false },
-  plugins: {
-    legend: { display:false },
-    tooltip: {
-      backgroundColor: '#161e2e',
-      borderColor: '#2a3a52',
-      borderWidth: 1,
-      titleFont: { family: 'JetBrains Mono', size:10 },
-      bodyFont: { family: 'JetBrains Mono', size:10 },
-      padding: 8,
-    }
-  },
-  scales: {
-    x: {
-      ticks: { color:'#4a5f78', font:{ family:'JetBrains Mono', size:9 }, maxTicksLimit:8 },
-      grid: { color:'rgba(255,255,255,0.03)' },
-      border: { color:'#1f2d42' }
-    },
-    y: {
-      ticks: { color:'#4a5f78', font:{ family:'JetBrains Mono', size:9 }, maxTicksLimit:5 },
-      grid: { color:'rgba(255,255,255,0.03)' },
-      border: { color:'#1f2d42' }
-    }
-  }
-};
-
-function renderStacked() {
-  const wrap = document.getElementById('chartsWrap');
-  // Remove panels not needed, add missing
-  const existingPanels = new Set([...wrap.querySelectorAll('.cpanel')].map(e=>e.dataset.stageKey));
-  const neededKeys = STATE.stageOrder;
-
-  // Remove stale panels
-  wrap.querySelectorAll('.cpanel').forEach(el => {
-    if (!neededKeys.includes(el.dataset.stageKey)) {
-      destroyChart(el.dataset.stageKey);
-      el.remove();
-    }
-  });
-
-  const zoomFraction = STATE.zoom / 100;
-  const startFraction = STATE.pan / 100;
-
-  for (const key of STATE.stageOrder) {
-    const arr = STATE.stages[key];
-    if (!arr) continue;
-    const meta = key.startsWith('notch_') ? getNotchMeta(parseInt(key.split('_')[1])) : STAGE_META[key];
-    if (!meta) continue;
-
-    const isPinned = STATE.pinnedStages.has(key);
-    const isHidden = STATE.hiddenStages.has(key);
-
-    let panel = wrap.querySelector(`[data-stage-key="${key}"]`);
-    if (!panel) {
-      panel = document.createElement('div');
-      panel.className = 'cpanel';
-      panel.dataset.stageKey = key;
-      panel.innerHTML = `
-        <div class="cpanel-header">
-          <span class="sdot" style="background:${meta.color};width:8px;height:8px;border-radius:50%;flex-shrink:0"></span>
-          <span class="ch-title">${meta.label}</span>
-          <div class="ch-badges" id="badges_${key}"></div>
+      <!-- FILTERS TAB -->
+      <div class="sidebar-body" id="tabFilters">
+
+        <div class="sb-section">
+          <div class="sb-label">Moving Average</div>
+          <div class="fcard" id="fcMA">
+            <div class="fcard-header" onclick="toggleCard('fcMA')">
+              <span class="fcard-dot" style="background:var(--c1)"></span>
+              <span class="fcard-name">Moving Average</span>
+              <label class="toggle" onclick="event.stopPropagation()">
+                <input type="checkbox" id="enMA" checked onchange="applyPipeline()" />
+                <span class="tslider"></span>
+              </label>
+            </div>
+            <div class="fcard-body">
+              <div class="prow">
+                <span class="plbl">Window</span>
+                <input type="range" id="maW" min="1" max="200" value="10"
+                  oninput="syncV('maW','maWv');applyPipeline()" />
+                <input type="number" id="maWv" value="10" min="1" max="200" style="width:50px"
+                  oninput="syncR('maWv','maW');applyPipeline()" />
+              </div>
+            </div>
+          </div>
         </div>
-        <div class="cpanel-canvas osc-bg" style="height:${isPinned?'160px':'32px'}">
-          <canvas id="canvas_${key}"></canvas>
-        </div>`;
-      panel.querySelector('.cpanel-header').addEventListener('click', () => cycleStageVisibility(key));
-      wrap.appendChild(panel);
-    }
 
-    // Update class
-    panel.className = 'cpanel' + (isPinned?' pinned':isHidden?' hidden-panel':' mini-panel');
-    const canvasWrap = panel.querySelector('.cpanel-canvas');
-    if (isPinned) canvasWrap.style.height = Math.max(130, (wrap.clientHeight - 20 - STATE.pinnedStages.size*40) / STATE.pinnedStages.size) + 'px';
-    else canvasWrap.style.height = '32px';
+        <div class="sb-section">
+          <div class="sb-label">Low-Pass Filter</div>
+          <div class="fcard" id="fcLP">
+            <div class="fcard-header" onclick="toggleCard('fcLP')">
+              <span class="fcard-dot" style="background:var(--c2)"></span>
+              <span class="fcard-name">Low-Pass (Butterworth)</span>
+              <label class="toggle" onclick="event.stopPropagation()">
+                <input type="checkbox" id="enLP" onchange="applyPipeline()" />
+                <span class="tslider"></span>
+              </label>
+            </div>
+            <div class="fcard-body">
+              <div class="prow">
+                <span class="plbl">Cutoff Hz</span>
+                <input type="range" id="lpF" min="1" max="500" value="100"
+                  oninput="syncV('lpF','lpFv');applyPipeline()" />
+                <input type="number" id="lpFv" value="100" min="1" max="500"
+                  oninput="syncR('lpFv','lpF');applyPipeline()" />
+              </div>
+              <div class="prow">
+                <span class="plbl">Order</span>
+                <input type="range" id="lpOrd" min="1" max="8" value="2" step="1"
+                  oninput="syncV('lpOrd','lpOrdv',0);applyPipeline()" />
+                <input type="number" id="lpOrdv" value="2" min="1" max="8" style="width:50px"
+                  oninput="syncR('lpOrdv','lpOrd');applyPipeline()" />
+              </div>
+              <div class="prow">
+                <span class="plbl">Zero-φ</span>
+                <label class="toggle"><input type="checkbox" id="lpZP" onchange="applyPipeline()" /><span
+                    class="tslider"></span></label>
+                <span style="font-size:.58rem;color:var(--muted);font-family:var(--mono)">forward+back</span>
+              </div>
+            </div>
+          </div>
+        </div>
 
-    // Draw
-    const data = getDisplayData(arr);
-    const labels = getTimeAxis(data.length, startFraction, zoomFraction);
-    const st = calcStats(arr);
+        <div class="sb-section">
+          <div class="sb-label">High-Pass Filter</div>
+          <div class="fcard" id="fcHP">
+            <div class="fcard-header" onclick="toggleCard('fcHP')">
+              <span class="fcard-dot" style="background:var(--c3)"></span>
+              <span class="fcard-name">High-Pass (Butterworth)</span>
+              <label class="toggle" onclick="event.stopPropagation()">
+                <input type="checkbox" id="enHP" onchange="applyPipeline()" />
+                <span class="tslider"></span>
+              </label>
+            </div>
+            <div class="fcard-body">
+              <div class="prow">
+                <span class="plbl">Cutoff Hz</span>
+                <input type="range" id="hpF" min="0.1" max="500" step="0.1" value="1"
+                  oninput="syncV('hpF','hpFv');applyPipeline()" />
+                <input type="number" id="hpFv" value="1" min="0.1" max="500" step="0.1"
+                  oninput="syncR('hpFv','hpF');applyPipeline()" />
+              </div>
+              <div class="prow">
+                <span class="plbl">Order</span>
+                <input type="range" id="hpOrd" min="1" max="8" value="2" step="1"
+                  oninput="syncV('hpOrd','hpOrdv',0);applyPipeline()" />
+                <input type="number" id="hpOrdv" value="2" min="1" max="8" style="width:50px"
+                  oninput="syncR('hpOrdv','hpOrd');applyPipeline()" />
+              </div>
+              <div class="prow">
+                <span class="plbl">Zero-φ</span>
+                <label class="toggle"><input type="checkbox" id="hpZP" onchange="applyPipeline()" /><span
+                    class="tslider"></span></label>
+                <span style="font-size:.58rem;color:var(--muted);font-family:var(--mono)">forward+back</span>
+              </div>
+            </div>
+          </div>
+        </div>
 
-    // Badges
-    const badgesEl = document.getElementById(`badges_${key}`);
-    if (badgesEl) {
-      badgesEl.innerHTML = '';
-      if (key !== 'raw') {
-        const snr = calcSNR(STATE.raw, arr);
-        const snrStr = isFinite(snr) ? snr.toFixed(1) : '∞';
-        const cls = parseFloat(snrStr) > 20 ? 'badge-ok' : parseFloat(snrStr) > 10 ? 'badge-warn' : 'badge-err';
-        badgesEl.innerHTML += `<span class="badge ${cls}" title="SNR vs raw">SNR ${snrStr} dB</span>`;
-      }
-      badgesEl.innerHTML += `<span class="badge badge-info">σ ${st.std.toFixed(1)}</span>`;
-    }
+        <div class="sb-section">
+          <div class="sb-label">Notch Filters <span class="notch-count" id="notchCount">0</span></div>
+          <div id="notchContainer"></div>
+          <button class="add-notch-btn" onclick="addNotch()">＋ Add Notch Filter</button>
+        </div>
 
-    destroyChart(key);
-    const ctx = document.getElementById(`canvas_${key}`);
-    if (!ctx) continue;
+        <div class="sb-section">
+          <div class="sb-label">Baseline Correction</div>
+          <div class="fcard" id="fcBL">
+            <div class="fcard-header" onclick="toggleCard('fcBL')">
+              <span class="fcard-dot" style="background:#64748b"></span>
+              <span class="fcard-name">Baseline / Detrend</span>
+              <label class="toggle" onclick="event.stopPropagation()">
+                <input type="checkbox" id="enBL" onchange="applyPipeline()" />
+                <span class="tslider"></span>
+              </label>
+            </div>
+            <div class="fcard-body">
+              <div class="prow">
+                <span class="plbl">Mode</span>
+                <select id="blMode" onchange="applyPipeline()">
+                  <option value="mean">Subtract Mean</option>
+                  <option value="linear">Linear Detrend</option>
+                  <option value="median">Subtract Median</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
 
-    STATE.charts[key] = new Chart(ctx, {
-      type: 'line',
-      data: {
-        labels,
-        datasets:[{
-          data,
-          borderColor: meta.color,
-          backgroundColor: isPinned ? meta.color+'12' : 'transparent',
-          borderWidth: isPinned ? 1.5 : 1,
-          pointRadius: 0,
-          fill: isPinned,
-          tension: 0.1,
-        }]
-      },
-      options: {
-        ...CHART_DEFAULTS,
-        plugins: {
-          ...CHART_DEFAULTS.plugins,
-          tooltip: {
-            ...CHART_DEFAULTS.plugins.tooltip,
-            callbacks: {
-              title: items => `t = ${items[0].label}s`,
-              label: item  => `${meta.short} = ${parseFloat(item.raw).toFixed(2)}`
-            }
-          }
-        },
-        scales: {
-          ...CHART_DEFAULTS.scales,
-          x: { ...CHART_DEFAULTS.scales.x, display: isPinned },
-          y: { ...CHART_DEFAULTS.scales.y, display: isPinned }
-        },
-        onHover: (evt, elements, chart) => {
-          if (elements.length) {
-            const idx = elements[0].index;
-            document.getElementById('crTime').textContent = labels[idx] + 's';
-            const rawVal = STATE.stages['raw'] ? getDisplayData(STATE.stages['raw'])[idx] : '—';
-            const finVal = STATE.stages['final'] ? getDisplayData(STATE.stages['final'])[idx] : '—';
-            document.getElementById('crRaw').textContent = typeof rawVal === 'number' ? rawVal.toFixed(2) : '—';
-            document.getElementById('crFilt').textContent = typeof finVal === 'number' ? finVal.toFixed(2) : '—';
-            if (typeof rawVal === 'number' && typeof finVal === 'number') {
-              document.getElementById('crDelta').textContent = (finVal-rawVal).toFixed(2);
-            }
-          }
-        }
-      }
-    });
-  }
-}
+      </div><!-- /tabFilters -->
 
-function renderOverlay() {
-  const wrap = document.getElementById('chartsWrap');
-  wrap.querySelectorAll('.cpanel').forEach(el=>{ if(el.dataset.stageKey !== '_overlay') { destroyChart(el.dataset.stageKey); el.remove(); }});
-
-  let panel = wrap.querySelector('[data-stage-key="_overlay"]');
-  if (!panel) {
-    panel = document.createElement('div');
-    panel.className = 'cpanel pinned';
-    panel.dataset.stageKey = '_overlay';
-    panel.innerHTML = `<div class="cpanel-header">
-        <span class="ch-title">OVERLAY — All Active Stages</span>
+      <!-- PIPELINE TAB -->
+      <div class="sidebar-body" id="tabPipeline" style="display:none">
+        <div class="sb-section">
+          <div class="sb-label">Processing Order</div>
+          <div class="pipeline-order" id="pipelineOrder">
+            <div class="po-item active" data-stage="MA"><span class="fcard-dot" style="background:var(--c1)"></span>1.
+              Moving Average</div>
+            <div class="po-item active" data-stage="HP"><span class="fcard-dot" style="background:var(--c3)"></span>2.
+              High-Pass</div>
+            <div class="po-item active" data-stage="LP"><span class="fcard-dot" style="background:var(--c2)"></span>3.
+              Low-Pass</div>
+            <div class="po-item active" data-stage="NOTCH"><span class="fcard-dot"
+                style="background:var(--c4)"></span>4. Notch(es)</div>
+            <div class="po-item active" data-stage="BL"><span class="fcard-dot" style="background:#64748b"></span>5.
+              Baseline</div>
+          </div>
+        </div>
+        <div class="sb-section">
+          <div class="sb-label">Pipeline Visualization</div>
+          <div id="pipelineViz" style="display:flex;flex-direction:column;gap:3px"></div>
+        </div>
+        <div class="sb-section">
+          <div class="sb-label">Processing Log</div>
+          <div class="proc-log" id="procLog"
+            style="height:200px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;"></div>
+        </div>
       </div>
-      <div class="cpanel-canvas osc-bg" style="height:calc(100% - 40px)">
-        <canvas id="canvas__overlay"></canvas>
-      </div>`;
-    panel.style.flex = '1';
-    wrap.appendChild(panel);
-  }
 
-  const activeKeys = STATE.stageOrder.filter(k => !STATE.hiddenStages.has(k));
-  const datasets = activeKeys.map(key => {
-    const arr = STATE.stages[key];
-    const meta = key.startsWith('notch_') ? getNotchMeta(parseInt(key.split('_')[1])) : STAGE_META[key];
-    if (!arr || !meta) return null;
-    return {
-      label: meta.short,
-      data: getDisplayData(arr),
-      borderColor: meta.color,
-      borderWidth: 1.5,
-      pointRadius: 0,
-      fill: false,
-      tension: 0.1,
-    };
-  }).filter(Boolean);
-
-  if (datasets.length === 0) return;
-  const labels = getTimeAxis(datasets[0].data.length, STATE.pan/100, STATE.zoom/100);
-
-  destroyChart('_overlay');
-  const ctx = document.getElementById('canvas__overlay');
-  if (!ctx) return;
-
-  STATE.charts['_overlay'] = new Chart(ctx, {
-    type:'line',
-    data:{ labels, datasets },
-    options: {
-      ...CHART_DEFAULTS,
-      plugins: {
-        ...CHART_DEFAULTS.plugins,
-        legend: { display:true, labels:{ color:'#cbd5e1', font:{family:'JetBrains Mono',size:10}, boxWidth:12, boxHeight:2 } }
-      }
-    }
-  });
-}
-
-function renderSpectrumLayout() {
-  const wrap = document.getElementById('chartsWrap');
-  wrap.querySelectorAll('.cpanel').forEach(el=>{ destroyChart(el.dataset.stageKey); el.remove(); });
-
-  const keysToShow = ['raw','final'];
-
-  for (const key of keysToShow) {
-    const arr = STATE.stages[key];
-    if (!arr) continue;
-    const meta = STAGE_META[key];
-    const { mag, freqs } = computeSpectrum(arr, STATE.fs);
-    const maxShow = 500; // Hz
-    const count = Math.floor(maxShow * mag.length * 2 / STATE.fs);
-    const data = Array.from(mag.subarray(0, count)).map(v => 20*Math.log10(v+1e-10));
-    const labels = Array.from(freqs.subarray(0, count)).map(f => f.toFixed(1));
-
-    const panel = document.createElement('div');
-    panel.className = 'cpanel pinned';
-    panel.dataset.stageKey = key+'_spec';
-    panel.style.flex = '1';
-    panel.innerHTML = `<div class="cpanel-header">
-        <span class="sdot" style="background:${meta.color};width:8px;height:8px;border-radius:50%;flex-shrink:0"></span>
-        <span class="ch-title">${meta.label} — SPECTRUM</span>
+      <!-- METRICS TAB -->
+      <div class="sidebar-body" id="tabMetrics" style="display:none">
+        <div class="sb-section">
+          <div class="sb-label">Signal Metrics — Raw</div>
+          <div class="metrics-grid" id="metricsRaw"></div>
+        </div>
+        <div class="sb-section">
+          <div class="sb-label">Signal Metrics — Final</div>
+          <div class="metrics-grid" id="metricsFinal"></div>
+        </div>
+        <div class="sb-section">
+          <div class="sb-label">SNR Improvement</div>
+          <div id="snrMeter"
+            style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:10px">
+            <div style="font-family:var(--mono);font-size:.63rem;color:var(--muted)">No data</div>
+          </div>
+        </div>
+        <div class="sb-section">
+          <div class="sb-label">Frequency Content</div>
+          <div id="freqContent"
+            style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:10px">
+            <div style="font-family:var(--mono);font-size:.63rem;color:var(--muted)">No data</div>
+          </div>
+        </div>
       </div>
-      <div class="cpanel-canvas osc-bg" style="height:calc(100% - 40px)">
-        <canvas id="canvas_${key}_spec"></canvas>
-      </div>`;
-    wrap.appendChild(panel);
 
-    const ctx = document.getElementById(`canvas_${key}_spec`);
-    if (!ctx) continue;
+      <!-- ANALYSIS TAB -->
+      <div class="sidebar-body" id="tabAnalysis" style="display:none">
 
-    STATE.charts[key+'_spec'] = new Chart(ctx, {
-      type:'line',
-      data:{
-        labels,
-        datasets:[{
-          data,
-          borderColor:meta.color,
-          backgroundColor:meta.color+'18',
-          borderWidth:1.5,
-          pointRadius:0,
-          fill:true,
-          tension:0.15,
-        }]
-      },
-      options:{
-        ...CHART_DEFAULTS,
-        plugins:{
-          ...CHART_DEFAULTS.plugins,
-          tooltip:{
-            ...CHART_DEFAULTS.plugins.tooltip,
-            callbacks:{
-              title:items=>`${items[0].label} Hz`,
-              label:item=>`${parseFloat(item.raw).toFixed(1)} dB`
-            }
-          }
-        },
-        scales:{
-          x:{...CHART_DEFAULTS.scales.x, title:{display:true,text:'Frequency (Hz)',color:'#4a5f78',font:{family:'JetBrains Mono',size:9}}},
-          y:{...CHART_DEFAULTS.scales.y, title:{display:true,text:'dB',color:'#4a5f78',font:{family:'JetBrains Mono',size:9}}}
-        }
-      }
-    });
-  }
-}
+        <div class="sb-section">
+          <div class="sb-label">EEG Band Power</div>
+          <div class="prow" style="margin-bottom:3px">
+            <span class="plbl">Source</span>
+            <select id="bandSrc" class="analysis-sel">
+              <option value="raw">Raw</option>
+              <option value="final" selected>Final</option>
+            </select>
+          </div>
+          <div class="band-grid" id="bandGrid">
+            <div style="font-family:var(--mono);font-size:.62rem;color:var(--muted)">Run pipeline to compute</div>
+          </div>
+        </div>
 
-// ─── SPECTRUM RIGHT PANEL ─────────────────────────────────────
-let specChart = null;
-function renderSpectrum() {
-  if (!STATE.stages['raw'] || !STATE.stages['final']) return;
-  const canvas = document.getElementById('specCanvas');
-  const parent = canvas.parentElement;
-  canvas.width = parent.clientWidth;
-  canvas.height = parent.clientHeight;
+        <div class="sb-section">
+          <div class="sb-label">RMS Envelope</div>
+          <div class="prow">
+            <span class="plbl">Enable</span>
+            <label class="toggle"><input type="checkbox" id="enRMS" onchange="renderCharts()" /><span
+                class="tslider"></span></label>
+          </div>
+          <div class="prow">
+            <span class="plbl">Win ms</span>
+            <input type="range" id="rmsWin" min="5" max="500" value="50"
+              oninput="syncV('rmsWin','rmsWinV');renderCharts()" />
+            <input type="number" id="rmsWinV" value="50" min="5" max="500" style="width:55px"
+              oninput="syncR('rmsWinV','rmsWin');renderCharts()" />
+          </div>
+        </div>
 
-  const { mag:mRaw, freqs } = computeSpectrum(STATE.stages['raw'], STATE.fs);
-  const { mag:mFin } = computeSpectrum(STATE.stages['final'], STATE.fs);
+        <div class="sb-section">
+          <div class="sb-label">ECG — R-Peak Detection</div>
+          <div class="bpm-display">
+            <div class="bpm-val" id="bpmVal">—</div>
+            <div class="bpm-lbl">BPM</div>
+            <div class="hrv-row" style="margin-top:6px">
+              <span style="color:var(--muted)">RMSSD</span>
+              <span style="color:var(--accent)" id="hrvVal">—</span>
+            </div>
+            <div class="hrv-row">
+              <span style="color:var(--muted)">Peaks</span>
+              <span style="color:var(--accent)" id="peaksCount">—</span>
+            </div>
+          </div>
+          <div class="prow">
+            <span class="plbl">Source</span>
+            <select id="ecgSrc" class="analysis-sel">
+              <option value="raw">Raw</option>
+              <option value="final" selected>Final</option>
+            </select>
+          </div>
+          <div class="prow">
+            <span class="plbl">Show peaks</span>
+            <label class="toggle"><input type="checkbox" id="enPeaks" onchange="renderCharts()" /><span
+                class="tslider"></span></label>
+          </div>
+          <button class="add-notch-btn" onclick="runRPeakDetection()" style="margin-top:2px">⚡ Detect R-Peaks</button>
+        </div>
 
-  const maxShow = Math.min(300, STATE.fs/2);
-  const count = Math.floor(maxShow * mRaw.length * 2 / STATE.fs);
-  const labels = Array.from(freqs.subarray(0,count)).map(f=>f.toFixed(1));
-  const dRaw = Array.from(mRaw.subarray(0,count)).map(v=>20*Math.log10(v+1e-10));
-  const dFin = Array.from(mFin.subarray(0,count)).map(v=>20*Math.log10(v+1e-10));
+        <div class="sb-section">
+          <div class="sb-label">Annotations</div>
+          <div id="annotList"
+            style="display:flex;flex-direction:column;gap:3px;font-family:var(--mono);font-size:.6rem;color:var(--muted)">
+            <span>No annotations</span>
+          </div>
+          <button class="add-notch-btn" onclick="clearAnnotations()" style="margin-top:2px">✕ Clear All</button>
+        </div>
 
-  // Dominant frequency
-  let maxMag=0, domIdx=0;
-  for (let i=1; i<mRaw.length/2 && i<count; i++) { if(mRaw[i]>maxMag){maxMag=mRaw[i];domIdx=i;} }
-  document.getElementById('domFreq').textContent = freqs[domIdx].toFixed(1) + ' Hz';
+      </div><!-- /tabAnalysis -->
+    </aside>
 
-  if (specChart) { specChart.destroy(); specChart=null; }
-  specChart = new Chart(canvas, {
-    type:'line',
-    data:{
-      labels,
-      datasets:[
-        {data:dRaw,borderColor:'#38bdf866',borderWidth:1,pointRadius:0,fill:false,tension:0.1,label:'Raw'},
-        {data:dFin,borderColor:'#34d399cc',borderWidth:1.5,pointRadius:0,fill:'origin',backgroundColor:'#34d39918',tension:0.1,label:'Final'}
-      ]
-    },
-    options:{
-      responsive:false,
-      animation:{duration:0},
-      plugins:{legend:{display:false},tooltip:{enabled:false}},
-      scales:{
-        x:{ticks:{color:'#4a5f78',font:{family:'JetBrains Mono',size:8},maxTicksLimit:5},grid:{color:'rgba(255,255,255,0.03)'},border:{color:'#1f2d42'}},
-        y:{ticks:{color:'#4a5f78',font:{family:'JetBrains Mono',size:8},maxTicksLimit:4},grid:{color:'rgba(255,255,255,0.03)'},border:{color:'#1f2d42'}}
-      }
-    }
-  });
-}
-
-// ─── METRICS ─────────────────────────────────────────────────
-function updateMetrics() {
-  function renderMetrics(el, arr) {
-    if (!arr || !el) return;
-    const st = calcStats(arr);
-    el.innerHTML = `
-      <div class="metric"><div class="mv">${st.min.toFixed(1)}</div><div class="ml">Min</div></div>
-      <div class="metric"><div class="mv">${st.max.toFixed(1)}</div><div class="ml">Max</div></div>
-      <div class="metric"><div class="mv">${st.mean.toFixed(1)}</div><div class="ml">Mean</div></div>
-      <div class="metric"><div class="mv">${st.std.toFixed(1)}</div><div class="ml">Std Dev</div></div>
-      <div class="metric"><div class="mv">${st.rms.toFixed(1)}</div><div class="ml">RMS</div></div>
-      <div class="metric"><div class="mv">${(st.max-st.min).toFixed(1)}</div><div class="ml">P-P</div></div>
-    `;
-  }
-  renderMetrics(document.getElementById('metricsRaw'), STATE.stages['raw']);
-  renderMetrics(document.getElementById('metricsFinal'), STATE.stages['final']);
-
-  if (STATE.stages['raw'] && STATE.stages['final']) {
-    const snr = calcSNR(STATE.stages['raw'], STATE.stages['final']);
-    const snrStr = isFinite(snr) ? snr.toFixed(1) : '∞';
-    const rawStd = calcStats(STATE.stages['raw']).std;
-    const finStd = calcStats(STATE.stages['final']).std;
-    const reduction = rawStd > 0 ? ((rawStd-finStd)/rawStd*100).toFixed(1) : '0';
-    const cls = parseFloat(snrStr) > 20 ? 'badge-ok' : parseFloat(snrStr) > 10 ? 'badge-warn' : 'badge-err';
-    document.getElementById('snrMeter').innerHTML = `
-      <div style="display:flex;gap:8px;justify-content:space-between;margin-bottom:8px">
-        <span class="badge ${cls}" style="font-size:0.8rem;padding:4px 10px">SNR ${snrStr} dB</span>
-        <span class="badge badge-info">Noise ↓${reduction}%</span>
+    <!-- CENTER: CHARTS -->
+    <div class="chart-area">
+      <div class="stage-toolbar" id="stageToolbar">
+        <span style="font-family:var(--mono);font-size:.58rem;color:var(--muted);flex-shrink:0">STAGES:</span>
+        <div class="stb-spacer"></div>
+        <div style="font-family:var(--mono);font-size:.58rem;color:var(--muted);flex-shrink:0;margin-right:2px">VIEW:
+        </div>
+        <div class="view-btns">
+          <div class="vbtn active" id="vbtn1" onclick="setLayout('stacked',this)">Stacked</div>
+          <div class="vbtn" id="vbtn2" onclick="setLayout('overlay',this)">Overlay</div>
+          <div class="vbtn" id="vbtn3" onclick="setLayout('spectrum',this)">Spectrum</div>
+          <div class="vbtn" id="vbtn4" onclick="setLayout('spectrogram',this)">Spectro</div>
+        </div>
+        <div class="divider-v" style="margin:0 4px"></div>
+        <label
+          style="display:flex;align-items:center;gap:4px;font-family:var(--mono);font-size:.6rem;color:var(--muted);cursor:pointer;white-space:nowrap">
+          <input type="checkbox" id="syncZoom" checked style="accent-color:var(--accent)" />Sync
+        </label>
       </div>
-      <div class="snr-bar"><div class="snr-fill" style="width:${Math.min(100,Math.max(0,(parseFloat(snrStr)/40*100)))}%;background:${parseFloat(snrStr)>20?'var(--success)':parseFloat(snrStr)>10?'var(--warn)':'var(--danger)'}"></div></div>`;
 
-    // Frequency content
-    const { mag, freqs } = computeSpectrum(STATE.stages['final'], STATE.fs);
-    const bands = [
-      {name:'DC-1 Hz',lo:0,hi:1},
-      {name:'1-10 Hz',lo:1,hi:10},
-      {name:'10-50 Hz',lo:10,hi:50},
-      {name:'50-100 Hz',lo:50,hi:100},
-      {name:'100-500 Hz',lo:100,hi:500},
-    ];
-    let fcHtml = '';
-    for (const b of bands) {
-      const lo = Math.floor(b.lo * mag.length*2/STATE.fs);
-      const hi = Math.floor(b.hi * mag.length*2/STATE.fs);
-      let power = 0;
-      for (let i=lo; i<Math.min(hi,mag.length); i++) power += mag[i]*mag[i];
-      power = Math.sqrt(power);
-      const db = (20*Math.log10(power+1e-10)).toFixed(1);
-      fcHtml += `<div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:0.62rem;margin-bottom:3px">
-        <span style="color:var(--muted)">${b.name}</span>
-        <span style="color:var(--accent)">${db} dB</span>
-      </div>`;
-    }
-    document.getElementById('freqContent').innerHTML = fcHtml;
-  }
-}
+      <div class="charts-wrap" id="chartsWrap">
+        <div class="empty-overlay" id="emptyState">
+          <div class="empty-icon">⚡</div>
+          <div class="empty-text">
+            Drop your <strong style="color:var(--accent)">CSV</strong> anywhere on this window<br />
+            or click the load button above<br />
+            <span style="font-size:.68rem;color:var(--border2)">Supports: EMG · ECG · EEG · EOG · ADC · any numeric
+              signal</span>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">
+            <span><span class="kbd">Ctrl+O</span> <span style="color:var(--muted);font-size:.68rem">open</span></span>
+            <span><span class="kbd">R</span> <span style="color:var(--muted);font-size:.68rem">run</span></span>
+            <span><span class="kbd">?</span> <span style="color:var(--muted);font-size:.68rem">help</span></span>
+          </div>
+        </div>
+      </div>
 
-// ─── PIPELINE VIZ ─────────────────────────────────────────────
-function updatePipelineViz() {
-  const el = document.getElementById('pipelineViz');
-  let html = '';
-  for (let i=0; i<STATE.stageOrder.length; i++) {
-    const key = STATE.stageOrder[i];
-    const meta = key.startsWith('notch_') ? getNotchMeta(parseInt(key.split('_')[1])) : STAGE_META[key];
-    if (!meta) continue;
-    if (i > 0) html += `<span class="pv-arrow">→</span>`;
-    html += `<div class="pv-node ${STATE.hiddenStages.has(key)?'':'active'}" style="border-color:${meta.color}44;color:${meta.color}">
-      <div style="width:5px;height:5px;border-radius:50%;background:${meta.color}"></div>
-      ${meta.short}
-    </div>`;
-  }
-  el.innerHTML = html;
-}
+      <div class="zp-controls" id="zoomBar" style="display:none">
+        <span class="plbl">Zoom&nbsp;</span>
+        <input type="range" id="zoomRange" class="zp-slider" min="5" max="100" value="100" oninput="updateZoom()" />
+        <span style="font-family:var(--mono);font-size:.6rem;color:var(--accent)" id="zoomLabel">100%</span>
+        <span class="plbl" style="margin-left:8px">Pan&nbsp;</span>
+        <input type="range" id="panRange" class="zp-slider" min="0" max="100" value="0" oninput="updateZoom()" />
+        <span style="font-family:var(--mono);font-size:.6rem;color:var(--muted)" id="panLabel">0%</span>
+        <button class="btn btn-ghost" style="margin-left:auto;padding:2px 7px;font-size:.6rem"
+          onclick="resetZoom()">Reset</button>
+      </div>
+    </div>
 
-// ─── LAYOUT ───────────────────────────────────────────────────
-function setLayout(mode, el) {
-  document.querySelectorAll('.vbtn').forEach(e=>e.classList.remove('active'));
-  el.classList.add('active');
-  STATE.layout = mode;
+    <!-- RIGHT PANEL -->
+    <div class="right-panel">
+      <div class="rp-section">
+        <div class="rp-title">Cursor Readout</div>
+        <div class="cursor-readout" id="cursorReadout">
+          <div class="cr-row"><span class="cr-lbl">Sample</span><span class="cr-val" id="crIdx">—</span></div>
+          <div class="cr-row"><span class="cr-lbl">Time</span><span class="cr-val" id="crTime">—</span></div>
+          <div class="cr-row"><span class="cr-lbl">Raw ADC</span><span class="cr-val" id="crRaw">—</span></div>
+          <div class="cr-row"><span class="cr-lbl">Filtered</span><span class="cr-val" id="crFilt">—</span></div>
+          <div class="cr-row"><span class="cr-lbl">Δ (noise)</span><span class="cr-val" id="crDelta">—</span></div>
+        </div>
+      </div>
 
-  // Clear
-  destroyAllCharts();
-  const wrap = document.getElementById('chartsWrap');
-  wrap.querySelectorAll('.cpanel').forEach(e=>e.remove());
+      <div class="rp-section">
+        <div class="rp-title">Overlay Stages</div>
+        <div id="overlayToggle" style="display:flex;gap:4px;flex-wrap:wrap"></div>
+      </div>
 
-  if (STATE.raw) renderCharts();
-}
+      <div class="freq-panel">
+        <div class="rp-title">Welch PSD</div>
+        <div class="spec-wrap" id="specWrap">
+          <canvas id="specCanvas" style="width:100%;height:100%;display:block"></canvas>
+        </div>
+        <div
+          style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:.56rem;color:var(--muted);margin-top:4px">
+          <span>0 Hz</span>
+          <span>Dominant: <span id="domFreq" style="color:var(--accent)">—</span></span>
+          <span id="nyqLabel">— Hz</span>
+        </div>
+      </div>
+    </div>
 
-// ─── ZOOM/PAN ─────────────────────────────────────────────────
-function updateZoom() {
-  STATE.zoom = parseInt(document.getElementById('zoomRange').value);
-  STATE.pan  = parseInt(document.getElementById('panRange').value);
-  document.getElementById('zoomLabel').textContent = STATE.zoom + '%';
-  document.getElementById('panLabel').textContent  = STATE.pan + '%';
-  if (STATE.raw) {
-    destroyAllCharts();
-    document.getElementById('chartsWrap').querySelectorAll('.cpanel').forEach(e=>e.remove());
-    renderCharts();
-  }
-}
+  </div><!-- /workspace -->
 
-function resetZoom() {
-  document.getElementById('zoomRange').value = 100;
-  document.getElementById('panRange').value  = 0;
-  STATE.zoom = 100; STATE.pan = 0;
-  document.getElementById('zoomLabel').textContent = '100%';
-  document.getElementById('panLabel').textContent  = '0%';
-  if (STATE.raw) {
-    destroyAllCharts();
-    document.getElementById('chartsWrap').querySelectorAll('.cpanel').forEach(e=>e.remove());
-    renderCharts();
-  }
-}
-
-// ─── EXPORT ───────────────────────────────────────────────────
-function exportData() {
-  if (!STATE.raw || !STATE.stages['final']) return;
-  const rows = ['timestamp_us,raw,final'];
-  const step = Math.round(1e6/STATE.fs);
-  const raw = STATE.stages['raw'];
-  const fin = STATE.stages['final'];
-
-  // Add all stages as columns
-  const allStages = STATE.stageOrder.filter(k=>k!=='raw'&&k!=='final'&&STATE.stages[k]);
-  const header = ['timestamp_us','raw',...allStages,'final'];
-  rows[0] = header.join(',');
-
-  for (let i=0; i<raw.length; i++) {
-    const ts = STATE.timestamps ? STATE.timestamps[i] : i*step;
-    const parts = [ts.toFixed(0), raw[i].toFixed(3)];
-    for (const k of allStages) parts.push(STATE.stages[k] ? STATE.stages[k][i].toFixed(3) : '');
-    parts.push(fin[i].toFixed(3));
-    rows.push(parts.join(','));
-  }
-
-  const blob = new Blob([rows.join('\n')], {type:'text/csv'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `neurolab_filtered_${Date.now()}.csv`;
-  a.click();
-  log('Exported '+rows.length+' rows', 'ok');
-}
-
-// ─── KEYBOARD SHORTCUTS ───────────────────────────────────────
-document.addEventListener('keydown', e => {
-  if (e.ctrlKey && e.key === 'o') { e.preventDefault(); fileInput.click(); }
-  if (!e.ctrlKey && e.key === 'r') applyPipeline();
-  if (!e.ctrlKey && e.key === 'e') exportData();
-  if (e.key === '1') setLayout('stacked', document.querySelector('.vbtn:nth-child(1)'));
-  if (e.key === '2') setLayout('overlay', document.querySelector('.vbtn:nth-child(2)'));
-  if (e.key === '3') setLayout('spectrum', document.querySelector('.vbtn:nth-child(3)'));
-});
-
-// ─── HELP MODAL ───────────────────────────────────────────────
-function showHelp() {
-  alert([
-    '⌨️ NEUROLAB PRO — KEYBOARD SHORTCUTS',
-    '',
-    'Ctrl+O    Load CSV file',
-    'R         Run pipeline',
-    'E         Export filtered CSV',
-    '1         Stacked view',
-    '2         Overlay view',
-    '3         Spectrum view',
-    '',
-    '🖱️ STAGE BUTTONS (top toolbar):',
-    '  Click once → Pin (large view)',
-    '  Click twice → Mini (thumbnail)',
-    '  Click thrice → Hide',
-    '',
-    '📊 VIEWS:',
-    '  Stacked — each stage as its own chart',
-    '  Overlay — all active stages on one chart',
-    '  Spectrum — FFT frequency analysis of Raw vs Final',
-    '',
-    '📁 CSV FORMAT:',
-    '  timestamp_us,value  (auto-detects Fs)',
-    '  single column ADC values (uses default 2000 Hz)',
-    '',
-    '🔬 FILTERS:',
-    '  Moving Average, Butterworth LP/HP, Notch (unlimited)',
-    '  Baseline correction: mean, linear detrend, median'
-  ].join('\n'));
-}
-
-// ─── INIT ─────────────────────────────────────────────────────
-// Default: add two common notches for 50Hz power line interference
-addNotch(50, 5, 2);
-addNotch(100, 5, 1);
-log('NeuroLab Pro initialized', 'ok');
-log('Awaiting signal data…', 'info');
-</script>
+  <!-- Scripts -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <script src="./engine.js"></script>
+  <script src="./app.js"></script>
 </body>
+
 </html>
