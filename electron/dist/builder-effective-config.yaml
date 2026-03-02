@@ -1,0 +1,24 @@
+directories:
+  output: dist
+  buildResources: build
+appId: com.neurolab.pro
+productName: NeuroLab Pro
+copyright: Copyright © 2026 NeuroLab
+files:
+  - filter:
+      - main.js
+      - ../Visualizer/**/*
+extraResources: []
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: ../Visualizer/icons/icon.png
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: NeuroLab Pro
+electronVersion: 29.4.6
