@@ -22,6 +22,7 @@ NeuroLab Pro is a high-performance tool for real-time and post-hoc analysis of b
 
 - [Key Features](#key-features)
 - [Screenshots](#screenshots)
+- [Practical Usage Guide](./USAGE.md)
 - [Getting Started](#getting-started)
   - [Web App (Browser)](#option-1-web-app-browser)
   - [Desktop App (Windows)](#option-2-desktop-app-windows)
