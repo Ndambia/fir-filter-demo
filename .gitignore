@@ -1,0 +1,27 @@
+# ─── Node / Electron ────────────────────────────────────────────────────────
+electron/node_modules/
+electron/dist/
+electron/package-lock.json
+
+# ─── Python ─────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+
+# ─── Generated / output files ───────────────────────────────────────────────
+filter_demo_plots/
+
+# ─── OS / editor ────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+*.swp
+*.swo
