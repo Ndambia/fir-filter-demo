@@ -13,7 +13,7 @@ function createWindow() {
         minWidth: 900,
         minHeight: 600,
         title: 'NeuroLab Pro',
-        icon: path.join(__dirname, '..', 'Visualizer', 'icons', 'icon-512.png'),
+        icon: path.join(__dirname, 'src', 'icons', 'icon.ico'),
         backgroundColor: '#060810',
         webPreferences: {
             nodeIntegration: false,

@@ -14,7 +14,7 @@ win:
     - target: nsis
       arch:
         - x64
-  icon: ../Visualizer/icons/icon.png
+  icon: src/icons/icon.ico
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
