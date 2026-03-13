@@ -9,7 +9,7 @@
 
 **Comprehensive Biosignal Analysis & DSP Suite**
 
-NeuroLab Pro is a high-performance tool for real-time and post-hoc analysis of biosignals such as **EMG, ECG, EEG, and EOG**. It combines a powerful custom DSP engine with a modern, responsive UI for detailed signal examination — available both as a **web app** and a native **Windows desktop application**.
+NeuroLab Pro is a high-performance tool for real-time and post-hoc analysis of biosignals such as **EMG, EEG, and EOG**. It combines a powerful custom DSP engine with a modern, responsive UI for detailed signal examination — available both as a **web app** and a native **Windows desktop application**.
 
 ---
 
@@ -180,7 +180,7 @@ Outputs are saved to `filter_demo_plots/` (9 PNG files).
 lowcut  = 3.0    # Low cutoff frequency (Hz)
 highcut = 30.0   # High cutoff frequency (Hz)
 numtaps = 101    # Filter order (more taps = sharper roll-off)
-fs      = 200    # Sampling rate of your signal
+fs      = 2000    # Sampling rate of your signal
 ```
 
 ### Using With Your Own Data
