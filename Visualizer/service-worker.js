@@ -1,4 +1,4 @@
-const CACHE_NAME = "neurolab-pro-v3";
+const CACHE_NAME = "neurolab-pro-v4";
 const ASSETS = [
   "./",
   "./index.html",
@@ -7,6 +7,18 @@ const ASSETS = [
   "./manifest.json",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
+  "./Images/Signal.png",
+  "./Images/neurolab_Overview.png",
+  // Fonts
+  "./assets/fonts/JetBrainsMono-300.ttf",
+  "./assets/fonts/JetBrainsMono-400.ttf",
+  "./assets/fonts/JetBrainsMono-500.ttf",
+  "./assets/fonts/JetBrainsMono-700.ttf",
+  "./assets/fonts/Syne-400.ttf",
+  "./assets/fonts/Syne-600.ttf",
+  "./assets/fonts/Syne-700.ttf",
+  "./assets/fonts/Syne-800.ttf",
+  // CDN
   "https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"
 ];
 

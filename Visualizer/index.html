@@ -7,6 +7,10 @@
   <title>NeuroLab Pro — Biosignal Analysis Suite</title>
   <link rel="manifest" href="./manifest.json" />
   <meta name="theme-color" content="#060810" />
+  <meta name="description" content="Offline-capable signal analysis suite for CSV time-series (EMG/EOG/ADC)." />
+  <link rel="apple-touch-icon" href="./icons/icon-192.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <style>
     /* Bundled local fonts — no internet required */
     @font-face {
@@ -1418,6 +1422,43 @@
     #fileInput {
       display: none;
     }
+
+    /* PWA Install button */
+    #installBtn {
+      display: none;
+      align-items: center;
+      gap: 5px;
+      padding: 5px 11px;
+      border-radius: 5px;
+      font-family: var(--mono);
+      font-size: .65rem;
+      letter-spacing: .5px;
+      border: 1px solid var(--success);
+      cursor: pointer;
+      transition: .15s;
+      white-space: nowrap;
+      background: rgba(52, 211, 153, .1);
+      color: var(--success);
+      margin-left: auto;
+      animation: installPulse 2s ease-in-out 3;
+    }
+
+    #installBtn:hover {
+      background: rgba(52, 211, 153, .2);
+      box-shadow: 0 0 12px rgba(52, 211, 153, .2);
+    }
+
+    @keyframes installPulse {
+
+      0%,
+      100% {
+        box-shadow: 0 0 0 rgba(52, 211, 153, 0);
+      }
+
+      50% {
+        box-shadow: 0 0 14px rgba(52, 211, 153, .35);
+      }
+    }
   </style>
 </head>
 
@@ -1531,6 +1572,8 @@
       <button class="btn btn-ghost" id="btnAnnot" onclick="toggleAnnotMode()" title="Toggle annotation mode (M)">🖊
         Annotate</button>
       <button class="btn btn-ghost" onclick="showHelp()">? Help</button>
+      <button id="installBtn" onclick="installApp()" title="Install NeuroLab Pro as a desktop app">⬇ Install
+        App</button>
     </div>
   </div>
 
@@ -1891,6 +1934,48 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
   <script src="./engine.js"></script>
   <script src="./app.js"></script>
+
+  <!-- PWA: Service Worker Registration & Install Prompt -->
+  <script>
+    // Register the service worker for offline caching
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./service-worker.js')
+          .then(reg => console.log('[SW] registered:', reg.scope))
+          .catch(err => console.warn('[SW] registration failed:', err));
+      });
+    }
+
+    // Capture the beforeinstallprompt event for the install button
+    let deferredPrompt = null;
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      const btn = document.getElementById('installBtn');
+      if (btn) btn.style.display = 'flex';
+    });
+
+    function installApp() {
+      if (!deferredPrompt) return;
+      deferredPrompt.prompt();
+      deferredPrompt.userChoice.then((result) => {
+        if (result.outcome === 'accepted') {
+          console.log('[PWA] App installed');
+        }
+        deferredPrompt = null;
+        const btn = document.getElementById('installBtn');
+        if (btn) btn.style.display = 'none';
+      });
+    }
+
+    // Hide install button if already installed
+    window.addEventListener('appinstalled', () => {
+      deferredPrompt = null;
+      const btn = document.getElementById('installBtn');
+      if (btn) btn.style.display = 'none';
+      console.log('[PWA] App was installed');
+    });
+  </script>
 </body>
 
 </html>
