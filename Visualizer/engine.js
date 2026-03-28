@@ -46,7 +46,7 @@
   }
 
   // ═══════════════════════════════════════════════════════════════
-  //  FFT SPECTRUM  (simple, rectangular window)
+  //  FFT SPECTRUM  (Hann-windowed, single-shot)
   // ═══════════════════════════════════════════════════════════════
   function computeSpectrum(signal, fs) {
     let n = 1;
@@ -199,20 +199,8 @@
     const winLo = Math.round(0.12 * fs); // ~120ms → low-freq baseline
     const winHi = Math.round(0.04 * fs); // ~40ms  → high-freq MA
 
-    function ma(sig, w) {
-      w = Math.max(1, w);
-      const out = new Float64Array(sig.length);
-      let s = 0;
-      for (let i = 0; i < sig.length; i++) {
-        s += sig[i];
-        if (i >= w) s -= sig[i - w];
-        out[i] = s / Math.min(i + 1, w);
-      }
-      return out;
-    }
-
-    const lo = ma(signal, winLo);
-    const hi = ma(signal, winHi);
+    const lo = movingAverage(signal, winLo);
+    const hi = movingAverage(signal, winHi);
     const diff = new Float64Array(n);
     for (let i = 0; i < n; i++) diff[i] = hi[i] - lo[i];
 
@@ -222,7 +210,7 @@
 
     // 3) Integration window 150ms
     const intWin = Math.round(0.15 * fs);
-    const integrated = ma(sq, intWin);
+    const integrated = movingAverage(sq, intWin);
 
     // 4) Adaptive threshold (mean * 0.5)
     let sum = 0; for (const v of integrated) sum += v;
@@ -515,9 +503,16 @@
   // ═══════════════════════════════════════════════════════════════
   //  CSV PARSING + Fs ESTIMATION
   // ═══════════════════════════════════════════════════════════════
-  const STD_RATES = [50, 100, 128, 200, 250, 256, 500, 512, 1000, 1024, 1250, 2000, 2048, 4000, 4096, 5000, 8000, 10000, 12000, 16000, 20000, 22050, 44100, 48000, 96000, 192000];
+  const STD_RATES = [
+    // Biosignal sampling rates
+    50, 100, 128, 200, 250, 256, 500, 512,
+    1000, 1024, 1250, 2000, 2048, 4000, 4096, 5000,
+    // Audio sampling rates
+    8000, 10000, 12000, 16000, 20000, 22050,
+    44100, 48000, 96000, 192000,
+  ];
 
-  function snapDist(fs) {
+  function snapToStandardRate(fs) {
     let best = STD_RATES[0];
     for (const r of STD_RATES) if (Math.abs(r - fs) < Math.abs(best - fs)) best = r;
     return { snapped: best, relErr: Math.abs(best - fs) / fs };
@@ -542,11 +537,13 @@
 
     // -- Column detection --
     // Column name keywords (in priority order)
-    const TIME_KWS = ["timestamp", "time", "t_s", "t_ms", "t_us", "time_s", "time_ms", "time_us", "ts", "stamp", "sample_time", "s"];
+    const TIME_KWS   = ["timestamp", "time", "t_s", "t_ms", "t_us", "time_s", "time_ms", "time_us", "ts", "stamp", "sample_time", "s"];
     const SIGNAL_KWS = ["emg", "ecg", "eeg", "eog", "adc", "val", "value", "signal", "voltage", "amplitude", "data", "ch0", "ch1", "ch2", "raw", "sensor"];
-    const SKIP_KWS = ["label", "class", "target", "annotation", "marker", "flag", "event", "category", "id", "index", "tag"];
+    // Label keywords — detected independently, NOT skipped from signal search
+    const LABEL_KWS  = ["label", "class", "target", "annotation", "gaze", "direction", "dir", "marker", "event", "category"];
+    const SKIP_KWS   = ["flag", "id", "index", "tag"];
 
-    let tsCol = -1, valCol = -1, detectedNames = {};
+    let tsCol = -1, valCol = -1, labelCol = -1, detectedNames = {};
 
     if (hasHeader) {
       const hdr = firstParts.map(p => p.toLowerCase().trim());
@@ -557,8 +554,15 @@
         if (i >= 0) { tsCol = i; break; }
       }
 
-      // Find signal column — skip time column AND skip-keyword columns
+      // Find label column
+      for (const kw of LABEL_KWS) {
+        const i = hdr.findIndex(h => h === kw || h.startsWith(kw) || h.includes(kw));
+        if (i >= 0 && i !== tsCol) { labelCol = i; break; }
+      }
+
+      // Find signal column — skip time, label, and SKIP_KWS columns
       const skipSet = new Set(hdr.map((h, i) => {
+        if (i === tsCol || i === labelCol) return i;
         if (SKIP_KWS.some(k => h.includes(k))) return i;
         return -1;
       }).filter(i => i >= 0));
@@ -591,17 +595,21 @@
         }
         if (valCol === -1) valCol = tsCol === 0 ? 1 : 0;
       }
-      detectedNames = { ts: firstParts[tsCol] || "col" + tsCol, val: firstParts[valCol] || "col" + valCol };
+      detectedNames = {
+        ts:    firstParts[tsCol]    || "col" + tsCol,
+        val:   firstParts[valCol]   || "col" + valCol,
+        label: labelCol >= 0 ? (firstParts[labelCol] || "col" + labelCol) : null,
+      };
     } else {
       // No header: single column = signal; two columns = time,signal; more = time,signal,...
       const nCols = firstParts.length;
       if (nCols === 1) { tsCol = -1; valCol = 0; }   // pure signal column
       else { tsCol = 0; valCol = 1; }
-      detectedNames = { ts: "col" + tsCol, val: "col" + valCol };
+      detectedNames = { ts: "col" + tsCol, val: "col" + valCol, label: null };
     }
 
     // -- Parse rows --
-    const values = [], timestamps = [];
+    const values = [], timestamps = [], labelRaw = [];
     for (const line of dataLines) {
       if (!line.trim()) continue;
       const parts = splitLine(line);
@@ -610,6 +618,10 @@
       values.push(val);
       const ts = tsCol >= 0 && parts.length > tsCol ? parseFloat(parts[tsCol]) : NaN;
       if (!isNaN(ts)) timestamps.push(ts);
+      // Always collect label (raw string) even if numeric
+      if (labelCol >= 0 && parts.length > labelCol) {
+        labelRaw.push(parts[labelCol].toLowerCase().trim());
+      }
     }
 
     if (values.length === 0) throw new Error("No numeric signal data found in column '" + (detectedNames.val) + "'. Check your CSV format.");
@@ -621,13 +633,28 @@
       tsArr = new Float64Array(timestamps.map(t => t - t0));
     }
 
+    // Convert raw labels → numeric: +1=right, 0=center, -1=left
+    // Accepted string forms: "right"/"r"/"1" → 1, "left"/"l"/"-1" → -1, "center"/"c"/"fix"/"0" → 0
+    let labelArr = null;
+    if (labelRaw.length === values.length && labelRaw.length > 0) {
+      labelArr = new Float64Array(labelRaw.length);
+      for (let i = 0; i < labelRaw.length; i++) {
+        const lv = labelRaw[i];
+        if (lv === 'right' || lv === 'r' || lv === '1') labelArr[i] = 1;
+        else if (lv === 'left' || lv === 'l' || lv === '-1') labelArr[i] = -1;
+        else labelArr[i] = 0; // center / fixation / 0 / anything else
+      }
+    }
+
     return {
       raw: new Float64Array(values),
       timestamps: tsArr,
+      labels: labelArr,          // Float64Array(+1/0/-1) or null
+      labelNames: labelRaw.length === values.length ? labelRaw : null, // raw strings
       hasHeader,
       headerCols: hasHeader ? firstParts.map(p => p.toLowerCase()) : null,
-      detectedNames,   // { ts: "timestamp", val: "emg" }
-      tsCol, valCol,
+      detectedNames,   // { ts, val, label }
+      tsCol, valCol, labelCol,
     };
   }
 
@@ -647,7 +674,7 @@
       { unit: "ms", fsRaw: 1 / (medDt * 1e-3) },
       { unit: "μs", fsRaw: 1 / (medDt * 1e-6) },
     ].filter(c => c.fsRaw >= 10 && c.fsRaw <= 500000)
-      .map(c => ({ ...c, ...snapDist(c.fsRaw) }))
+      .map(c => ({ ...c, ...snapToStandardRate(c.fsRaw) }))
       .sort((a, b) => a.relErr - b.relErr);
     if (!candidates.length) return { fs: defaultFs, autoDetected: false, note: "Out of range" };
     const best = candidates[0];
@@ -712,6 +739,151 @@
   }
 
   // ═══════════════════════════════════════════════════════════════
+  //  EOG GAZE DETECTION  (horizontal EOG — Left / Center / Right)
+  // ═══════════════════════════════════════════════════════════════
+
+  /** Return an empty EOG result (used for short signals). */
+  function _eogEmpty(n) {
+    return {
+      crests: [], troughs: [], gazeEvents: [],
+      gazeTimeline: new Float64Array(n),
+      filtered: new Float64Array(n),
+      thresholds: { pos: 0, neg: 0, mean: 0, std: 0 },
+      stats: { left: 0, center: n, right: 0, totalEvents: 0, leftEvents: 0, rightEvents: 0 }
+    };
+  }
+
+  /**
+   * Detect horizontal gaze direction from a single-channel EOG signal.
+   *
+   * Algorithm:
+   *  1. Band-pass filter 0.1–10 Hz (Butterworth, zero-phase) to isolate saccades.
+   *  2. Compute adaptive positive/negative thresholds: mean ± k × std.
+   *  3. Detect CRESTS (local max above +threshold) → RIGHT gaze.
+   *  4. Detect TROUGHS (local min below −threshold) → LEFT gaze.
+   *  5. Classify all samples between events as CENTER.
+   *  6. Build per-sample gazeTimeline: +1 = Right, -1 = Left, 0 = Center.
+   *
+   * @param {Float64Array} signal  - EOG samples
+   * @param {number}       fs      - sample rate (Hz)
+   * @param {object}       cfg     - { thresholdK=1.0, refractoryMs=200 }
+   * @returns {{
+   *   crests:       number[],         // sample indices of right-gaze peaks
+   *   troughs:      number[],         // sample indices of left-gaze troughs
+   *   gazeEvents:   Array<{idx, direction, amplitude}>,
+   *   gazeTimeline: Float64Array,     // +1 / 0 / -1 per sample
+   *   stats: { left, center, right, totalEvents }
+   * }}
+   */
+  function detectEOGGaze(signal, fs, cfg) {
+    cfg = cfg || {};
+    const thresholdK   = isFinite(cfg.thresholdK)  ? cfg.thresholdK  : 1.0;
+    const refractoryMs = isFinite(cfg.refractoryMs) ? cfg.refractoryMs : 200;
+    const n = signal.length;
+    if (n < 10) return _eogEmpty(n);
+
+    // ── 1. Band-pass: HP 0.1 Hz then LP 10 Hz (zero-phase) ──────
+    const hpCutoff = Math.min(0.1, fs / 2 - 0.01);
+    const lpCutoff = Math.min(10,  fs / 2 - 0.01);
+    let filtered = new Float64Array(signal);
+    if (hpCutoff > 0 && hpCutoff < fs / 2) {
+      filtered = applyBiquadZeroPhase(filtered, butterworthHP(hpCutoff, fs, 2));
+    }
+    if (lpCutoff > 0 && lpCutoff < fs / 2) {
+      filtered = applyBiquadZeroPhase(filtered, butterworthLP(lpCutoff, fs, 2));
+    }
+
+    // ── 2. Adaptive threshold ────────────────────────────────────
+    let sum = 0, sum2 = 0;
+    for (let i = 0; i < n; i++) { sum += filtered[i]; sum2 += filtered[i] * filtered[i]; }
+    const mean = sum / n;
+    const std  = Math.sqrt(Math.max(0, sum2 / n - mean * mean));
+    const posThresh =  mean + thresholdK * std;
+    const negThresh =  mean - thresholdK * std;
+
+    // ── 3 & 4. Peak detection (crests and troughs) ───────────────
+    const refSamples = Math.max(1, Math.round(refractoryMs / 1000 * fs));
+    const crests  = []; // right gaze peaks
+    const troughs = []; // left  gaze troughs
+    // We scan for local extrema with refractory gating
+    let lastCrest  = -refSamples;
+    let lastTrough = -refSamples;
+
+    for (let i = 1; i < n - 1; i++) {
+      const v  = filtered[i];
+      const vp = filtered[i - 1];
+      const vn = filtered[i + 1];
+
+      // Crest: local maximum above positive threshold
+      if (v > posThresh && v >= vp && v >= vn && (i - lastCrest) >= refSamples) {
+        // Refine: find true max within ±25ms window
+        const hw = Math.round(0.025 * fs);
+        const lo = Math.max(0, i - hw), hi = Math.min(n - 1, i + hw);
+        let mxIdx = i;
+        for (let j = lo; j <= hi; j++) if (filtered[j] > filtered[mxIdx]) mxIdx = j;
+        crests.push(mxIdx);
+        lastCrest = mxIdx;
+      }
+
+      // Trough: local minimum below negative threshold
+      if (v < negThresh && v <= vp && v <= vn && (i - lastTrough) >= refSamples) {
+        const hw = Math.round(0.025 * fs);
+        const lo = Math.max(0, i - hw), hi = Math.min(n - 1, i + hw);
+        let mnIdx = i;
+        for (let j = lo; j <= hi; j++) if (filtered[j] < filtered[mnIdx]) mnIdx = j;
+        troughs.push(mnIdx);
+        lastTrough = mnIdx;
+      }
+    }
+
+    // ── 5. Build sorted gaze-event list ──────────────────────────
+    const gazeEvents = [];
+    crests.forEach(idx =>
+      gazeEvents.push({ idx, direction: 'right', amplitude:  filtered[idx] - mean }));
+    troughs.forEach(idx =>
+      gazeEvents.push({ idx, direction: 'left',  amplitude: -(filtered[idx] - mean) }));
+    gazeEvents.sort((a, b) => a.idx - b.idx);
+
+    // ── 6. Per-sample gaze timeline ──────────────────────────────
+    // Rule: the direction of the nearest detected event dominates within
+    // a ±halfRefractory window; everything else is center.
+    const gazeTimeline = new Float64Array(n); // default 0 = center
+    const holdSamples  = Math.round(refSamples * 0.8); // hold direction slightly shorter than refractory
+
+    for (const ev of gazeEvents) {
+      const val  = ev.direction === 'right' ? 1 : -1;
+      const from = Math.max(0, ev.idx - Math.round(holdSamples * 0.3));
+      const to   = Math.min(n - 1, ev.idx + holdSamples);
+      for (let j = from; j <= to; j++) {
+        // Only overwrite if not yet claimed or same direction
+        if (gazeTimeline[j] === 0 || gazeTimeline[j] === val) gazeTimeline[j] = val;
+      }
+    }
+
+    // ── 7. Count events ──────────────────────────────────────────
+    let left = 0, right = 0, center = 0;
+    for (let i = 0; i < n; i++) {
+      if      (gazeTimeline[i] >  0.5) right++;
+      else if (gazeTimeline[i] < -0.5) left++;
+      else                              center++;
+    }
+    const totalEvents = gazeEvents.length;
+
+    return {
+      crests,
+      troughs,
+      gazeEvents,
+      gazeTimeline,
+      filtered,
+      thresholds: { pos: posThresh, neg: negThresh, mean, std },
+      stats: { left, center, right, totalEvents,
+               leftEvents: troughs.length, rightEvents: crests.length }
+    };
+  }
+
+  // (_eogEmpty moved above detectEOGGaze for top-down readability)
+
+  // ═══════════════════════════════════════════════════════════════
   //  EXPORT
   // ═══════════════════════════════════════════════════════════════
   global.NeuroLabEngine = {
@@ -721,6 +893,8 @@
     computeSpectrum, welchPSD, computeSpectrogram,
     // Analysis
     bandPower, rmsEnvelope, detectRPeaks, lttbDownsample,
+    // EOG
+    detectEOGGaze,
     // Metrics
     calcStats, calcSNR,
     // Audio

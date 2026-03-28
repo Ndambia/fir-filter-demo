@@ -1,14 +1,43 @@
 {
+  "id": "/",
   "name": "NeuroLab Pro — Signal Analysis Suite",
   "short_name": "NeuroLab Pro",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
+  "orientation": "landscape",
   "background_color": "#060810",
   "theme_color": "#060810",
   "description": "Offline-capable signal analysis suite for CSV time-series (EMG/EOG/ADC).",
+  "categories": [
+    "utilities",
+    "medical"
+  ],
   "icons": [
-    { "src": "./icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "./icons/icon-512.png", "sizes": "512x512", "type": "image/png" }
+    {
+      "src": "./icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "./icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "./icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "./Images/neurolab_Overview.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "NeuroLab Pro main analysis workspace"
+    }
   ]
 }

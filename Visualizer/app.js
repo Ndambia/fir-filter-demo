@@ -33,6 +33,12 @@
     annotMode: false,
     annotId: 0,
     lastBandPower: null,
+    // EOG
+    eogCrests: [],
+    eogTroughs: [],
+    eogGazeTimeline: null,
+    eogGazeEvents: [],
+    groundTruthLabels: null,  // Float64Array(+1/0/-1) from CSV label column
   };
   window.STATE = STATE;
 
@@ -144,6 +150,53 @@
   topDrop.addEventListener("click", () => fileInput.click());
   fileInput.addEventListener("change", () => { if (fileInput.files[0]) loadFile(fileInput.files[0]); fileInput.value = ""; });
 
+  // ── ANALYSIS STATE RESET ─────────────────────────────────────────────────
+  function resetAnalysisState() {
+    STATE.rpeaks = [];
+    STATE.annotations = [];
+    STATE.eogCrests = [];
+    STATE.eogTroughs = [];
+    STATE.eogGazeTimeline = null;
+    STATE.eogGazeEvents = [];
+    document.getElementById("bpmVal").textContent = "—";
+    document.getElementById("hrvVal").textContent = "—";
+    document.getElementById("peaksCount").textContent = "—";
+    ['eogLeftCount', 'eogCenterCount', 'eogRightCount'].forEach(id => {
+      const el = document.getElementById(id); if (el) el.textContent = '—';
+    });
+    const ti = document.getElementById('eogThreshInfo');
+    if (ti) ti.style.display = 'none';
+    const accEl = document.getElementById('eogAccuracy');
+    if (accEl) accEl.style.display = 'none';
+  }
+
+  // ── FILE UI UPDATE ──────────────────────────────────────────────────────
+  function updateFileUI(file, stats) {
+    document.getElementById("topDropLabel").textContent = "📄 " + file.name;
+    document.getElementById("topStats").style.display = "flex";
+    document.getElementById("emptyState").style.display = "none";
+    document.getElementById("btnApply").disabled = false;
+    document.getElementById("btnExport").disabled = false;
+    document.getElementById("zoomBar").style.display = "flex";
+    document.getElementById("statusDot").className = "status-dot live";
+    document.getElementById("statN").textContent = STATE.raw.length.toLocaleString();
+    document.getElementById("statMean").textContent = stats.mean.toFixed(2);
+    document.getElementById("statStd").textContent = stats.std.toFixed(2);
+
+    const durS = STATE.timestamps
+      ? STATE.timestamps[STATE.timestamps.length - 1]
+      : STATE.raw.length / STATE.fs;
+    document.getElementById("statDur").textContent =
+      durS >= 1 ? durS.toFixed(3) + "s" : (durS * 1000).toFixed(2) + "ms";
+
+    // Show GT badge if labels present
+    const gtBadge = document.getElementById('eogGTBadge');
+    if (gtBadge) {
+      gtBadge.style.display = STATE.groundTruthLabels ? '' : 'none';
+      gtBadge.textContent = STATE.groundTruthLabels ? `GT: ${STATE.groundTruthLabels.length.toLocaleString()} labels` : '';
+    }
+  }
+
   function loadFile(file) {
     document.getElementById("topDropLabel").innerHTML = `<div class="spinner" style="width:11px;height:11px"></div>&nbsp;Loading…`;
     const reader = new FileReader();
@@ -155,8 +208,18 @@
 
         // Log detected columns
         const dn = parsed.detectedNames || {};
-        log(`Columns → time:"${dn.ts || 'none'}" signal:"${dn.val || '?'}" (col${parsed.valCol})`, "info");
+        const lblNote = parsed.labelCol >= 0
+          ? `label:"${dn.label || '?'}" (col${parsed.labelCol})`
+          : 'no label col';
+        log(`Columns → time:"${dn.ts || 'none'}" signal:"${dn.val || '?'}" (col${parsed.valCol}) · ${lblNote}`, "info");
         log(`Loaded ${STATE.raw.length.toLocaleString()} samples`, "ok");
+
+        // Store ground truth labels
+        STATE.groundTruthLabels = parsed.labels || null;
+        if (STATE.groundTruthLabels) {
+          const lc = parsed.labelCol >= 0 ? `"${dn.label}"` : '';
+          log(`GT labels loaded from ${lc}: ${STATE.groundTruthLabels.length.toLocaleString()} samples`, 'ok');
+        }
 
         if (!STATE.fsManual) {
           const est = NeuroLabEngine.estimateFs(STATE.timestamps, 2000);
@@ -171,33 +234,8 @@
         }
 
         updateFsUI();
-        // Update topbar stats
-        const st = NeuroLabEngine.calcStats(STATE.raw);
-        document.getElementById("topDropLabel").textContent = "📄 " + file.name;
-        document.getElementById("topStats").style.display = "flex";
-        document.getElementById("emptyState").style.display = "none";
-        document.getElementById("btnApply").disabled = false;
-        document.getElementById("btnExport").disabled = false;
-        document.getElementById("zoomBar").style.display = "flex";
-        document.getElementById("statusDot").className = "status-dot live";
-        document.getElementById("statN").textContent = STATE.raw.length.toLocaleString();
-        document.getElementById("statMean").textContent = st.mean.toFixed(2);
-        document.getElementById("statStd").textContent = st.std.toFixed(2);
-
-        // Timestamps are normalised to start at 0 by parseSignal
-        const durS = STATE.timestamps
-          ? STATE.timestamps[STATE.timestamps.length - 1]
-          : STATE.raw.length / STATE.fs;
-        document.getElementById("statDur").textContent =
-          durS >= 1 ? durS.toFixed(3) + "s" : (durS * 1000).toFixed(2) + "ms";
-
-        // Reset analysis state
-        STATE.rpeaks = [];
-        STATE.annotations = [];
-        document.getElementById("bpmVal").textContent = "—";
-        document.getElementById("hrvVal").textContent = "—";
-        document.getElementById("peaksCount").textContent = "—";
-
+        updateFileUI(file, NeuroLabEngine.calcStats(STATE.raw));
+        resetAnalysisState();
         applyPipeline();
       } catch (ex) {
         log("Parse error: " + ex.message, "warn");
@@ -388,6 +426,7 @@
     else if (STATE.layout === "overlay") renderOverlay();
     else if (STATE.layout === "spectrum") renderSpectralView();
     else if (STATE.layout === "spectrogram") renderSpectrogramView();
+    renderEOGTimeline();
     updateOverlayChips();
   };
 
@@ -470,6 +509,35 @@
         }
       }
 
+      // ── EOG crest (right) and trough (left) markers ──────────────
+      if (document.getElementById('enEOGMarkers')?.checked) {
+        if (STATE.eogCrests.length > 0) {
+          const crestPts = STATE.eogCrests
+            .filter(i => i >= start && i < end)
+            .map(i => ({ x: i, y: signal[i] }));
+          if (crestPts.length) {
+            datasets.push({
+              label: 'Crest ▲ (Right)', data: crestPts, type: 'scatter',
+              pointRadius: 7, pointStyle: 'triangle',
+              pointBackgroundColor: '#34d399', pointBorderColor: '#34d399', showLine: false
+            });
+          }
+        }
+        if (STATE.eogTroughs.length > 0) {
+          const troughPts = STATE.eogTroughs
+            .filter(i => i >= start && i < end)
+            .map(i => ({ x: i, y: signal[i] }));
+          if (troughPts.length) {
+            datasets.push({
+              label: 'Trough ▼ (Left)', data: troughPts, type: 'scatter',
+              pointRadius: 7, pointStyle: 'triangle',
+              rotation: 180,
+              pointBackgroundColor: '#fb7185', pointBorderColor: '#fb7185', showLine: false
+            });
+          }
+        }
+      }
+
       // Persistent chart update
       if (STATE.charts[key]) {
         const chart = STATE.charts[key];
@@ -487,6 +555,77 @@
           .observe(canvasWrap);
       }
     });
+  }
+
+  // ── EOG GAZE TIMELINE PANEL ───────────────────────────────────────────────
+  function renderEOGTimeline() {
+    const wrap = document.getElementById('chartsWrap');
+    const show = document.getElementById('enEOGTimeline')?.checked && STATE.eogGazeTimeline;
+
+    // Remove old panel if turning off
+    if (!show) {
+      const old = wrap.querySelector('.cpanel[data-stage="_eogTimeline"]');
+      if (old) { destroyChart('_eogTimeline'); old.remove(); }
+      return;
+    }
+
+    let panel = wrap.querySelector('.cpanel[data-stage="_eogTimeline"]');
+    if (!panel) {
+      panel = document.createElement('div');
+      panel.className = 'cpanel osc-bg pinned';
+      panel.dataset.stage = '_eogTimeline';
+      panel.innerHTML = `
+        <div class="cpanel-header">
+          <span style="width:8px;height:8px;border-radius:50%;background:#a78bfa;flex-shrink:0;display:inline-block"></span>
+          <span class="ch-title">EOG — Gaze Direction Timeline</span>
+          <span class="badge badge-info">+1 Right · 0 Center · -1 Left</span>
+        </div>
+        <div class="cpanel-canvas" style="height:90px;position:relative">
+          <canvas id="canvas__eogTimeline" style="display:block"></canvas>
+        </div>`;
+      wrap.appendChild(panel);
+      new ResizeObserver(() => { if (STATE.charts['_eogTimeline']) STATE.charts['_eogTimeline'].resize(); })
+        .observe(panel.querySelector('.cpanel-canvas'));
+    }
+
+    const timeline = STATE.eogGazeTimeline;
+    const { start, end } = visibleSlice(timeline.length);
+    const slice = timeline.slice(start, end);
+    // Stepped line: subsample to MAX_POINTS
+    let pts;
+    if (slice.length <= MAX_POINTS) {
+      pts = Array.from(slice).map((v, i) => ({ x: start + i, y: v }));
+    } else {
+      const step = Math.ceil(slice.length / MAX_POINTS);
+      pts = [];
+      for (let i = 0; i < slice.length; i += step) pts.push({ x: start + i, y: slice[i] });
+    }
+
+    const datasets = [{
+      label: 'Gaze',
+      data: pts,
+      borderColor: '#a78bfa',
+      backgroundColor: 'rgba(167,139,250,.12)',
+      fill: true,
+      borderWidth: 1.5,
+      pointRadius: 0,
+      tension: 0,
+      stepped: 'before',
+    }];
+
+    const opts = baseOpts({ min: -1.5, max: 1.5, ticks: {
+      color: '#4a5f78', font: { family: "'JetBrains Mono',monospace", size: 9 },
+      callback: v => v === 1 ? '▶R' : v === -1 ? '◀L' : v === 0 ? '●C' : ''
+    }});
+
+    if (STATE.charts['_eogTimeline']) {
+      STATE.charts['_eogTimeline'].data.datasets = datasets;
+      STATE.charts['_eogTimeline'].update('none');
+    } else {
+      const canvas = document.getElementById('canvas__eogTimeline');
+      const ctx = canvas.getContext('2d');
+      STATE.charts['_eogTimeline'] = new Chart(ctx, { type: 'line', data: { datasets }, options: opts });
+    }
   }
 
   function makeDataset(key, points, color) {
@@ -824,6 +963,44 @@
   }
   window.computeBandPower = computeBandPower;
 
+  // ── EOG GAZE DETECTION ────────────────────────────────────────────────────
+  window.runEOGDetection = function () {
+    const src = (document.getElementById('eogSrc')?.value) || 'final';
+    const signal = STATE.stages[src] || STATE.stages.final;
+    if (!signal) { log('No signal — run pipeline first', 'warn'); return; }
+
+    const thresholdK = parseFloat(document.getElementById('eogKv')?.value) || 1.0;
+    log(`Running EOG gaze detection (k=${thresholdK})…`, 'info');
+
+    const res = NeuroLabEngine.detectEOGGaze(signal, STATE.fs, { thresholdK });
+    STATE.eogCrests       = res.crests;
+    STATE.eogTroughs      = res.troughs;
+    STATE.eogGazeTimeline = res.gazeTimeline;
+    STATE.eogGazeEvents   = res.gazeEvents;
+
+    // Update gaze count display
+    const s = res.stats;
+    document.getElementById('eogLeftCount').textContent   = s.leftEvents;
+    document.getElementById('eogCenterCount').textContent = '—';
+    document.getElementById('eogRightCount').textContent  = s.rightEvents;
+
+    // Show threshold info
+    const ti = document.getElementById('eogThreshInfo');
+    if (ti) {
+      ti.style.display = '';
+      document.getElementById('eogThreshVal').textContent  = res.thresholds.std.toFixed(3);
+      document.getElementById('eogEventCount').textContent = s.totalEvents;
+    }
+
+    log(
+      `EOG: ${s.leftEvents} left saccade(s) · ${s.rightEvents} right saccade(s) · ` +
+      `thresh=${res.thresholds.pos.toFixed(3)} / ${res.thresholds.neg.toFixed(3)}`,
+      'ok'
+    );
+
+    renderCharts();
+  };
+
   // ── R-PEAK DETECTION ──────────────────────────────────────────────────────
   window.runRPeakDetection = function () {
     const src = (document.getElementById("ecgSrc")?.value) || "final";
@@ -984,29 +1161,33 @@
   };
   document.addEventListener("click", () => document.getElementById("exportMenu")?.classList.remove("open"));
 
-  function dlBlob(content, name, mime) {
+  function downloadFile(content, name, mime) {
     const blob = new Blob([content], { type: mime });
-    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; a.click();
-  }
-  function dlBuf(buf, name) {
-    const blob = new Blob([buf], { type: "audio/wav" });
-    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; a.click();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   window.exportCSV = function () {
     if (!STATE.stages.final) return;
-    const lines = ["sample,time,raw,filtered"];
+    const hasGaze = STATE.eogGazeTimeline && STATE.eogGazeTimeline.length === STATE.stages.final.length;
+    const hdr = hasGaze ? 'sample,time,raw,filtered,gaze_dir' : 'sample,time,raw,filtered';
+    const lines = [hdr];
     for (let i = 0; i < STATE.stages.final.length; i++) {
       const t = STATE.timestamps ? STATE.timestamps[i] : (i / STATE.fs);
-      lines.push(`${i},${t},${STATE.raw[i]},${STATE.stages.final[i]}`);
+      const row = `${i},${t},${STATE.raw[i]},${STATE.stages.final[i]}`;
+      lines.push(hasGaze ? row + ',' + STATE.eogGazeTimeline[i] : row);
     }
-    dlBlob(lines.join("\n"), "neurolab_filtered.csv", "text/csv");
-    log("Exported filtered CSV", "ok");
+    downloadFile(lines.join("\n"), "neurolab_filtered.csv", "text/csv");
+    log(hasGaze ? 'Exported filtered CSV with gaze timeline' : 'Exported filtered CSV', 'ok');
   };
   window.exportWAV = function () {
     if (!STATE.stages.final) return;
     const buf = NeuroLabEngine.encodeWav(STATE.stages.final, STATE.fs);
-    dlBuf(buf, "neurolab_filtered.wav");
+    downloadFile(buf, "neurolab_filtered.wav", "audio/wav");
     log("Exported WAV (16-bit PCM)", "ok");
   };
   window.exportSpectrumCSV = function () {
@@ -1015,40 +1196,51 @@
     const { mag: mF } = NeuroLabEngine.welchPSD(STATE.stages.final || STATE.stages.raw, STATE.fs, 2048);
     const lines = ["freq_hz,mag_raw,mag_final"];
     for (let i = 0; i < freqs.length; i++) lines.push(`${freqs[i].toFixed(4)},${mR[i]},${mF[i]}`);
-    dlBlob(lines.join("\n"), "neurolab_spectrum.csv", "text/csv");
+    downloadFile(lines.join("\n"), "neurolab_spectrum.csv", "text/csv");
     log("Exported Welch PSD as CSV", "ok");
   };
   window.exportBandPower = function () {
     if (!STATE.stages.raw) return;
     if (!STATE.lastBandPower) computeBandPower();
-    dlBlob(JSON.stringify(STATE.lastBandPower, null, 2), "neurolab_bandpower.json", "application/json");
+    downloadFile(JSON.stringify(STATE.lastBandPower, null, 2), "neurolab_bandpower.json", "application/json");
     log("Exported band-power JSON", "ok");
   };
-  // Legacy: keep old exportData working
-  window.exportData = window.exportCSV;
 
   // ── HELP ──────────────────────────────────────────────────────────────────
   window.showHelp = function () { document.getElementById("helpModal").classList.add("open"); };
   window.closeHelp = function () { document.getElementById("helpModal").classList.remove("open"); };
 
   // ── KEYBOARD SHORTCUTS ────────────────────────────────────────────────────
+  function selectLayout(mode, index) {
+    setLayout(mode);
+    document.querySelectorAll(".vbtn").forEach((b, i) => b.classList.toggle("active", i === index));
+  }
+
+  const SHORTCUT_MAP = {
+    'r': () => { applyPipeline(); },
+    'e': () => exportCSV(),
+    'w': () => exportWAV(),
+    '1': () => selectLayout('stacked', 0),
+    '2': () => selectLayout('overlay', 1),
+    '3': () => selectLayout('spectrum', 2),
+    '4': () => selectLayout('spectrogram', 3),
+    ' ': () => resetZoom(),
+    'a': () => addNotch(),
+    'm': () => toggleAnnotMode(),
+    'g': () => { switchSTab(document.querySelector('.stab:last-of-type'), 'analysis'); runEOGDetection(); },
+    '?': () => showHelp(),
+  };
+
   document.addEventListener("keydown", e => {
     if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.tagName === "SELECT") return;
     if ((e.ctrlKey || e.metaKey) && e.key === "o") { e.preventDefault(); fileInput.click(); return; }
     if (e.key === "Escape") { closeHelp(); if (annotModeActive) toggleAnnotMode(); return; }
     if (!STATE.raw) return;
-    const k = e.key;
-    if (k === "r" || k === "R") { e.preventDefault(); applyPipeline(); }
-    if (k === "e" || k === "E") exportCSV();
-    if (k === "w" || k === "W") exportWAV();
-    if (k === "1") { setLayout("stacked"); document.querySelectorAll(".vbtn").forEach((b, i) => b.classList.toggle("active", i === 0)); }
-    if (k === "2") { setLayout("overlay"); document.querySelectorAll(".vbtn").forEach((b, i) => b.classList.toggle("active", i === 1)); }
-    if (k === "3") { setLayout("spectrum"); document.querySelectorAll(".vbtn").forEach((b, i) => b.classList.toggle("active", i === 2)); }
-    if (k === "4") { setLayout("spectrogram"); document.querySelectorAll(".vbtn").forEach((b, i) => b.classList.toggle("active", i === 3)); }
-    if (k === " ") { e.preventDefault(); resetZoom(); }
-    if (k === "a" || k === "A") addNotch();
-    if (k === "m" || k === "M") toggleAnnotMode();
-    if (k === "?") showHelp();
+    const handler = SHORTCUT_MAP[e.key.toLowerCase()];
+    if (handler) {
+      if (e.key === ' ' || e.key === 'r' || e.key === 'R') e.preventDefault();
+      handler();
+    }
   });
 
   // ── INIT ──────────────────────────────────────────────────────────────────

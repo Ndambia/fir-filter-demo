@@ -25,7 +25,7 @@
     },
     "files": [
       "main.js",
-      "../Visualizer/**/*"
+      "src/**/*"
     ],
     "extraResources": [],
     "win": {

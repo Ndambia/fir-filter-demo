@@ -7,7 +7,7 @@ copyright: Copyright © 2026 NeuroLab
 files:
   - filter:
       - main.js
-      - ../Visualizer/**/*
+      - src/**/*
 extraResources: []
 win:
   target:

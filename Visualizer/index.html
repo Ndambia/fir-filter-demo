@@ -1459,6 +1459,68 @@
         box-shadow: 0 0 14px rgba(52, 211, 153, .35);
       }
     }
+    /* ── EOG Gaze Direction Cards ── */
+    .eog-dir-card {
+      background: var(--bg3);
+      border: 1px solid rgba(251, 113, 133, .3);
+      border-radius: 6px;
+      padding: 5px 3px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1px;
+      transition: box-shadow .2s;
+    }
+
+    .eog-dir-card.eog-active {
+      box-shadow: 0 0 8px currentColor;
+    }
+
+    .eog-dir-card.eog-center {
+      border-color: rgba(148, 163, 184, .3);
+    }
+
+    .eog-dir-card.eog-right {
+      border-color: rgba(52, 211, 153, .3);
+    }
+
+    .eog-dir-icon {
+      font-size: .75rem;
+      color: var(--danger);
+    }
+
+    .eog-dir-card.eog-center .eog-dir-icon {
+      color: var(--muted);
+    }
+
+    .eog-dir-card.eog-right .eog-dir-icon {
+      color: var(--success);
+    }
+
+    .eog-dir-val {
+      font-family: var(--mono);
+      font-size: .82rem;
+      font-weight: 700;
+      color: var(--danger);
+      line-height: 1;
+    }
+
+    .eog-dir-card.eog-center .eog-dir-val {
+      color: var(--text);
+    }
+
+    .eog-dir-card.eog-right .eog-dir-val {
+      color: var(--success);
+    }
+
+    .eog-dir-lbl {
+      font-family: var(--mono);
+      font-size: .48rem;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
   </style>
 </head>
 
@@ -1484,6 +1546,7 @@
         <span>Space</span><span>Reset zoom / pan</span>
         <span>A</span><span>Add notch filter</span>
         <span>M</span><span>Toggle annotation mode</span>
+        <span>G</span><span>Detect EOG gaze direction</span>
         <span>?</span><span>Show this help</span>
         <span>Escape</span><span>Close modal / cancel mode</span>
       </div>
@@ -1833,6 +1896,64 @@
                 class="tslider"></span></label>
           </div>
           <button class="add-notch-btn" onclick="runRPeakDetection()" style="margin-top:2px">⚡ Detect R-Peaks</button>
+        </div>
+
+        <!-- EOG GAZE DETECTION -->
+        <div class="sb-section">
+          <div class="sb-label">EOG — Gaze Detection</div>
+
+          <div class="prow">
+            <span class="plbl">Source</span>
+            <select id="eogSrc" class="analysis-sel">
+              <option value="raw">Raw</option>
+              <option value="final" selected>Final</option>
+            </select>
+          </div>
+
+          <div class="prow">
+            <span class="plbl">Sensitivity</span>
+            <input type="range" id="eogK" min="0.3" max="3.0" step="0.1" value="1.0"
+              oninput="syncV('eogK','eogKv',1)" />
+            <input type="number" id="eogKv" value="1.0" min="0.3" max="3.0" step="0.1" style="width:52px"
+              oninput="syncR('eogKv','eogK')" />
+          </div>
+
+          <!-- Gaze counts -->
+          <div id="eogGazeDisplay" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin-top:2px">
+            <div class="eog-dir-card" id="eogLeftCard">
+              <div class="eog-dir-icon">◀</div>
+              <div class="eog-dir-val" id="eogLeftCount">—</div>
+              <div class="eog-dir-lbl">LEFT</div>
+            </div>
+            <div class="eog-dir-card eog-center" id="eogCenterCard">
+              <div class="eog-dir-icon">●</div>
+              <div class="eog-dir-val" id="eogCenterCount">—</div>
+              <div class="eog-dir-lbl">CTR</div>
+            </div>
+            <div class="eog-dir-card eog-right" id="eogRightCard">
+              <div class="eog-dir-icon">▶</div>
+              <div class="eog-dir-val" id="eogRightCount">—</div>
+              <div class="eog-dir-lbl">RIGHT</div>
+            </div>
+          </div>
+
+          <div id="eogThreshInfo" style="font-family:var(--mono);font-size:.56rem;color:var(--muted);text-align:center;display:none">
+            thresh ±<span id="eogThreshVal">—</span> · events: <span id="eogEventCount">—</span>
+          </div>
+
+          <div class="prow">
+            <span class="plbl">Markers</span>
+            <label class="toggle"><input type="checkbox" id="enEOGMarkers" onchange="renderCharts()" /><span class="tslider"></span></label>
+            <span style="font-size:.58rem;color:var(--muted);font-family:var(--mono)">▲▼ on chart</span>
+          </div>
+
+          <div class="prow">
+            <span class="plbl">Timeline</span>
+            <label class="toggle"><input type="checkbox" id="enEOGTimeline" onchange="renderCharts()" /><span class="tslider"></span></label>
+            <span style="font-size:.58rem;color:var(--muted);font-family:var(--mono)">gaze trace</span>
+          </div>
+
+          <button class="add-notch-btn" onclick="runEOGDetection()" style="margin-top:2px">👁 Detect Gaze</button>
         </div>
 
         <div class="sb-section">

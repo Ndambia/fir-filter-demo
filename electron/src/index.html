@@ -7,6 +7,10 @@
   <title>NeuroLab Pro — Biosignal Analysis Suite</title>
   <link rel="manifest" href="./manifest.json" />
   <meta name="theme-color" content="#060810" />
+  <meta name="description" content="Offline-capable signal analysis suite for CSV time-series (EMG/EOG/ADC)." />
+  <link rel="apple-touch-icon" href="./icons/icon-192.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <style>
     /* Bundled local fonts — no internet required */
     @font-face {
@@ -1418,6 +1422,105 @@
     #fileInput {
       display: none;
     }
+
+    /* PWA Install button */
+    #installBtn {
+      display: none;
+      align-items: center;
+      gap: 5px;
+      padding: 5px 11px;
+      border-radius: 5px;
+      font-family: var(--mono);
+      font-size: .65rem;
+      letter-spacing: .5px;
+      border: 1px solid var(--success);
+      cursor: pointer;
+      transition: .15s;
+      white-space: nowrap;
+      background: rgba(52, 211, 153, .1);
+      color: var(--success);
+      margin-left: auto;
+      animation: installPulse 2s ease-in-out 3;
+    }
+
+    #installBtn:hover {
+      background: rgba(52, 211, 153, .2);
+      box-shadow: 0 0 12px rgba(52, 211, 153, .2);
+    }
+
+    @keyframes installPulse {
+
+      0%,
+      100% {
+        box-shadow: 0 0 0 rgba(52, 211, 153, 0);
+      }
+
+      50% {
+        box-shadow: 0 0 14px rgba(52, 211, 153, .35);
+      }
+    }
+    /* ── EOG Gaze Direction Cards ── */
+    .eog-dir-card {
+      background: var(--bg3);
+      border: 1px solid rgba(251, 113, 133, .3);
+      border-radius: 6px;
+      padding: 5px 3px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1px;
+      transition: box-shadow .2s;
+    }
+
+    .eog-dir-card.eog-active {
+      box-shadow: 0 0 8px currentColor;
+    }
+
+    .eog-dir-card.eog-center {
+      border-color: rgba(148, 163, 184, .3);
+    }
+
+    .eog-dir-card.eog-right {
+      border-color: rgba(52, 211, 153, .3);
+    }
+
+    .eog-dir-icon {
+      font-size: .75rem;
+      color: var(--danger);
+    }
+
+    .eog-dir-card.eog-center .eog-dir-icon {
+      color: var(--muted);
+    }
+
+    .eog-dir-card.eog-right .eog-dir-icon {
+      color: var(--success);
+    }
+
+    .eog-dir-val {
+      font-family: var(--mono);
+      font-size: .82rem;
+      font-weight: 700;
+      color: var(--danger);
+      line-height: 1;
+    }
+
+    .eog-dir-card.eog-center .eog-dir-val {
+      color: var(--text);
+    }
+
+    .eog-dir-card.eog-right .eog-dir-val {
+      color: var(--success);
+    }
+
+    .eog-dir-lbl {
+      font-family: var(--mono);
+      font-size: .48rem;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
   </style>
 </head>
 
@@ -1443,6 +1546,7 @@
         <span>Space</span><span>Reset zoom / pan</span>
         <span>A</span><span>Add notch filter</span>
         <span>M</span><span>Toggle annotation mode</span>
+        <span>G</span><span>Detect EOG gaze direction</span>
         <span>?</span><span>Show this help</span>
         <span>Escape</span><span>Close modal / cancel mode</span>
       </div>
@@ -1531,6 +1635,8 @@
       <button class="btn btn-ghost" id="btnAnnot" onclick="toggleAnnotMode()" title="Toggle annotation mode (M)">🖊
         Annotate</button>
       <button class="btn btn-ghost" onclick="showHelp()">? Help</button>
+      <button id="installBtn" onclick="installApp()" title="Install NeuroLab Pro as a desktop app">⬇ Install
+        App</button>
     </div>
   </div>
 
@@ -1792,6 +1898,64 @@
           <button class="add-notch-btn" onclick="runRPeakDetection()" style="margin-top:2px">⚡ Detect R-Peaks</button>
         </div>
 
+        <!-- EOG GAZE DETECTION -->
+        <div class="sb-section">
+          <div class="sb-label">EOG — Gaze Detection</div>
+
+          <div class="prow">
+            <span class="plbl">Source</span>
+            <select id="eogSrc" class="analysis-sel">
+              <option value="raw">Raw</option>
+              <option value="final" selected>Final</option>
+            </select>
+          </div>
+
+          <div class="prow">
+            <span class="plbl">Sensitivity</span>
+            <input type="range" id="eogK" min="0.3" max="3.0" step="0.1" value="1.0"
+              oninput="syncV('eogK','eogKv',1)" />
+            <input type="number" id="eogKv" value="1.0" min="0.3" max="3.0" step="0.1" style="width:52px"
+              oninput="syncR('eogKv','eogK')" />
+          </div>
+
+          <!-- Gaze counts -->
+          <div id="eogGazeDisplay" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin-top:2px">
+            <div class="eog-dir-card" id="eogLeftCard">
+              <div class="eog-dir-icon">◀</div>
+              <div class="eog-dir-val" id="eogLeftCount">—</div>
+              <div class="eog-dir-lbl">LEFT</div>
+            </div>
+            <div class="eog-dir-card eog-center" id="eogCenterCard">
+              <div class="eog-dir-icon">●</div>
+              <div class="eog-dir-val" id="eogCenterCount">—</div>
+              <div class="eog-dir-lbl">CTR</div>
+            </div>
+            <div class="eog-dir-card eog-right" id="eogRightCard">
+              <div class="eog-dir-icon">▶</div>
+              <div class="eog-dir-val" id="eogRightCount">—</div>
+              <div class="eog-dir-lbl">RIGHT</div>
+            </div>
+          </div>
+
+          <div id="eogThreshInfo" style="font-family:var(--mono);font-size:.56rem;color:var(--muted);text-align:center;display:none">
+            thresh ±<span id="eogThreshVal">—</span> · events: <span id="eogEventCount">—</span>
+          </div>
+
+          <div class="prow">
+            <span class="plbl">Markers</span>
+            <label class="toggle"><input type="checkbox" id="enEOGMarkers" onchange="renderCharts()" /><span class="tslider"></span></label>
+            <span style="font-size:.58rem;color:var(--muted);font-family:var(--mono)">▲▼ on chart</span>
+          </div>
+
+          <div class="prow">
+            <span class="plbl">Timeline</span>
+            <label class="toggle"><input type="checkbox" id="enEOGTimeline" onchange="renderCharts()" /><span class="tslider"></span></label>
+            <span style="font-size:.58rem;color:var(--muted);font-family:var(--mono)">gaze trace</span>
+          </div>
+
+          <button class="add-notch-btn" onclick="runEOGDetection()" style="margin-top:2px">👁 Detect Gaze</button>
+        </div>
+
         <div class="sb-section">
           <div class="sb-label">Annotations</div>
           <div id="annotList"
@@ -1891,6 +2055,48 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
   <script src="./engine.js"></script>
   <script src="./app.js"></script>
+
+  <!-- PWA: Service Worker Registration & Install Prompt -->
+  <script>
+    // Register the service worker for offline caching
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./service-worker.js')
+          .then(reg => console.log('[SW] registered:', reg.scope))
+          .catch(err => console.warn('[SW] registration failed:', err));
+      });
+    }
+
+    // Capture the beforeinstallprompt event for the install button
+    let deferredPrompt = null;
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      const btn = document.getElementById('installBtn');
+      if (btn) btn.style.display = 'flex';
+    });
+
+    function installApp() {
+      if (!deferredPrompt) return;
+      deferredPrompt.prompt();
+      deferredPrompt.userChoice.then((result) => {
+        if (result.outcome === 'accepted') {
+          console.log('[PWA] App installed');
+        }
+        deferredPrompt = null;
+        const btn = document.getElementById('installBtn');
+        if (btn) btn.style.display = 'none';
+      });
+    }
+
+    // Hide install button if already installed
+    window.addEventListener('appinstalled', () => {
+      deferredPrompt = null;
+      const btn = document.getElementById('installBtn');
+      if (btn) btn.style.display = 'none';
+      console.log('[PWA] App was installed');
+    });
+  </script>
 </body>
 
 </html>
