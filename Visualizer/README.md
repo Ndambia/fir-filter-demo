@@ -33,8 +33,8 @@ NeuroLab Pro is a high-performance web-based tool designed for real-time and pos
 ### 🛠️ Professional Workflow
 - **Flexible CSV Parser:** Auto-detects columns, skips labels/annotations, and handles multiple separators.
 - **Annotation System:** Drop time-synced markers with labels directly on the signal.
-- **Comprehensive Export:** Export processed data to **CSV**, frequency data to **Spectrum CSV**, or timing/power metrics to **JSON**.
-- **Audio Conversion:** Export your filtered biosignals as **16-bit PCM WAV** files for audio-based analysis.
+- **Comprehensive Export:** Export processed data to **CSV** (including gaze timelines), frequency data to **Spectrum CSV**, or timing/power metrics to **JSON**.
+- **Audio Conversion:** Export your filtered biosignals as **16-bit PCM WAV** files for audio-based analysis without memory leaks via optimized blob handling.
 
 ---
 
@@ -51,6 +51,7 @@ NeuroLab Pro is a high-performance web-based tool designed for real-time and pos
 | `Space` | Reset Zoom & Pan |
 | `A` | Quick-add Notch Filter |
 | `M` | Toggle **Annotation Mode** |
+| `G` | Run Horizontal **EOG Gaze Detection** |
 | `E` | Export Filtered CSV |
 | `W` | Export Filtered WAV |
 | `?` | Toggle Help Menu |
@@ -69,10 +70,10 @@ NeuroLab Pro is a high-performance web-based tool designed for real-time and pos
 
 ## Tech Stack
 - **Core:** Vanilla JavaScript (ES6+)
-- **DSP Engine:** Custom `engine.js` (Zero dependencies)
+- **DSP Engine:** Custom modular `engine.js` (Zero dependencies, highly optimized)
 - **Visualization:** [Chart.js](https://www.chartjs.org/)
 - **Styling:** Dynamic CSS3 with Glassmorphism / Neon Aesthetics
-- **Architecture:** PWA-ready with Service Worker for offline use.
+- **Architecture:** PWA-ready with Service Worker for offline use. State management is elegantly separated from DOM rendering.
 
 ---
 
