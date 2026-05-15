@@ -544,6 +544,7 @@
     const SKIP_KWS   = ["flag", "id", "index", "tag"];
 
     let tsCol = -1, valCol = -1, labelCol = -1, detectedNames = {};
+    let skipSet = new Set();
 
     if (hasHeader) {
       const hdr = firstParts.map(p => p.toLowerCase().trim());
@@ -561,7 +562,7 @@
       }
 
       // Find signal column — skip time, label, and SKIP_KWS columns
-      const skipSet = new Set(hdr.map((h, i) => {
+      skipSet = new Set(hdr.map((h, i) => {
         if (i === tsCol || i === labelCol) return i;
         if (SKIP_KWS.some(k => h.includes(k))) return i;
         return -1;
@@ -608,14 +609,44 @@
       detectedNames = { ts: "col" + tsCol, val: "col" + valCol, label: null };
     }
 
-    // -- Parse rows --
-    const values = [], timestamps = [], labelRaw = [];
+    // ── Multi-channel detection ──────────────────────────────────
+    // Identify ALL numeric columns (excluding time, label, skip) as signal channels.
+    // The primary valCol is always channels[0]; additional columns follow in order.
+    const nCols = firstParts.length;
+    const signalCols = [valCol]; // primary channel first
+    const nCheck = Math.min(20, dataLines.length);
+    for (let c = 0; c < nCols; c++) {
+      if (c === tsCol || c === labelCol || c === valCol || skipSet.has(c)) continue;
+      // Check if this column is mostly numeric
+      let numericCount = 0;
+      for (let r = 0; r < nCheck; r++) {
+        if (r >= dataLines.length) break;
+        const parts = splitLine(dataLines[r]);
+        if (parts.length > c && isFinite(parseFloat(parts[c]))) numericCount++;
+      }
+      if (numericCount >= nCheck * 0.8) {
+        signalCols.push(c);
+      }
+    }
+
+    // -- Parse rows (all channels in one pass) --
+    const channelBuffers = signalCols.map(() => []);
+    const timestamps = [], labelRaw = [];
     for (const line of dataLines) {
       if (!line.trim()) continue;
       const parts = splitLine(line);
-      const val = valCol >= 0 && parts.length > valCol ? parseFloat(parts[valCol]) : NaN;
-      if (isNaN(val)) continue;
-      values.push(val);
+      // Primary channel must be valid for this row to count
+      const primaryVal = signalCols[0] >= 0 && parts.length > signalCols[0]
+        ? parseFloat(parts[signalCols[0]]) : NaN;
+      if (isNaN(primaryVal)) continue;
+
+      // Parse all signal channels for this row
+      for (let ch = 0; ch < signalCols.length; ch++) {
+        const col = signalCols[ch];
+        const v = col >= 0 && parts.length > col ? parseFloat(parts[col]) : NaN;
+        channelBuffers[ch].push(isNaN(v) ? 0 : v);
+      }
+
       const ts = tsCol >= 0 && parts.length > tsCol ? parseFloat(parts[tsCol]) : NaN;
       if (!isNaN(ts)) timestamps.push(ts);
       // Always collect label (raw string) even if numeric
@@ -624,6 +655,7 @@
       }
     }
 
+    const values = channelBuffers[0];
     if (values.length === 0) throw new Error("No numeric signal data found in column '" + (detectedNames.val) + "'. Check your CSV format.");
 
     // Normalise timestamps to start from 0
@@ -646,8 +678,20 @@
       }
     }
 
+    // Build channels array
+    const channels = signalCols.map((col, idx) => {
+      let name;
+      if (hasHeader && firstParts[col]) {
+        name = firstParts[col];
+      } else {
+        name = idx === 0 ? "Signal" : "Ch" + (idx + 1);
+      }
+      return { name, index: col, data: new Float64Array(channelBuffers[idx]) };
+    });
+    const channelNames = channels.map(ch => ch.name);
+
     return {
-      raw: new Float64Array(values),
+      raw: channels[0].data,    // primary channel — backward compatible
       timestamps: tsArr,
       labels: labelArr,          // Float64Array(+1/0/-1) or null
       labelNames: labelRaw.length === values.length ? labelRaw : null, // raw strings
@@ -655,6 +699,9 @@
       headerCols: hasHeader ? firstParts.map(p => p.toLowerCase()) : null,
       detectedNames,   // { ts, val, label }
       tsCol, valCol, labelCol,
+      // ── Multi-channel ──
+      channels,                  // Array<{ name, index, data: Float64Array }>
+      channelNames,              // string[]
     };
   }
 
