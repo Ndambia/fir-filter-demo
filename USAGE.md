@@ -16,7 +16,7 @@ The core of NeuroLab Pro is built for human-computer interface (HCI) and biomedi
 ### **ECG (Electrocardiography) - Heart Rates**
 - **R-Peak Detection:** Use the built-in **Pan-Tompkins Algorithm** to automatically find heartbeats.
 - **BPM Tracking:** View real-time Beats Per Minute (BPM) calculations and Heart Rate Variability (HRV) metrics.
-- **Noch Filtering:** Target the **50/60 Hz** powerline interference that often obscures heart signals.
+- **Notch Filtering:** Target the **50/60 Hz** powerline interference that often obscures heart signals.
 
 ### **EEG (Electroencephalography) - Brain Waves**
 - **Spectral Power:** Use the **welch** method in the Spectrum tab to identify Delta, Theta, Alpha, and Beta waves.
